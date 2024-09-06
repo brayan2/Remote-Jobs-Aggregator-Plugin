@@ -1,0 +1,75 @@
+/* custom-job-listing-styles.css */
+
+/* Ensure styles override the Jobify theme styles */
+body .job_listing {
+    font-family: 'Open Sans', Arial, sans-serif; /* SEO-friendly font */
+    color: #333;
+    margin: 20px 0;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+body .job_listing h1, 
+body .job_listing h2, 
+body .job_listing h3 {
+    font-family: 'Montserrat', sans-serif; /* SEO-friendly font */
+    color: #000000; /* Black */
+    margin-bottom: 10px;
+}
+
+body .job_listing .job_title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #000000; /* Black */
+    margin-bottom: 8px;
+}
+
+body .job_listing .company_logo {
+    max-width: 100px;
+    margin-bottom: 15px;
+}
+
+body .job_listing .job_description {
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 15px;
+    color: #555;
+}
+
+body .job_listing .job_meta {
+    margin-top: 15px;
+}
+
+body .job_listing .job_meta span {
+    display: inline-block;
+    margin-right: 10px;
+    font-size: 14px;
+    color: #777;
+}
+
+body .job_listing .apply_button {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #f13131;
+    color: #ffffff; /* White text */
+    text-decoration: none;
+    border: 1px solid #f13131;
+    border-radius: 5px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body .job_listing .apply_button:hover {
+    background-color: #ffffff;
+    color: #f13131; /* Red text */
+}
+
+/* Additional styles for ensuring background and text colors */
+body {
+    background-color: #ffffff;
+    color: #000000; /* Black */
+}
+
