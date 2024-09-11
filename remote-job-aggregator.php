@@ -3,9 +3,11 @@
 Plugin Name: Remote Job Aggregator
 Plugin URI: https://bgathuita.com
 Description: Fetches remote jobs from various RSS feeds and displays them on your WordPress site
-Version: 1.0.1  
+Version: 1.0.1
 Author: Brian Gathuita
 Author URI: https://bgathuita.com
+RequiresWP: 6.0
+RequiresPHP: 7.4
 */
 
 include_once plugin_dir_path(__FILE__) . 'job-fetching-functions.php';
@@ -16,7 +18,6 @@ if (!defined('ABSPATH')) {
 
 // Include other plugin files
 include_once plugin_dir_path(__FILE__) . 'admin-functions.php';
-include_once plugin_dir_path(__FILE__) . 'job-fetching-functions.php';
 include_once plugin_dir_path(__FILE__) . 'display-functions.php';
 include_once plugin_dir_path(__FILE__) . 'helper-functions.php';
 
@@ -25,7 +26,6 @@ add_action('init', 'rjobs_init');
 add_action('admin_menu', 'rjobs_admin_menu');
 add_action('admin_enqueue_scripts', 'rjobs_admin_scripts');
 add_action('wp_ajax_rjobs_bulk_action', 'rjobs_bulk_action');
-add_action('admin_init', 'rjobs_update_plugin'); // Check for update requests
 add_action('admin_init', 'rjobs_check_for_update'); // Check for plugin updates
 
 // Register cron job on plugin initialization
@@ -61,24 +61,6 @@ function rjobs_update_function() {
     // Example: Perform database schema updates or other update tasks
 }
 
-// Function to handle update requests
-function rjobs_update_plugin() {
-    if (isset($_GET['action']) && $_GET['action'] === 'update' && isset($_GET['plugin']) && $_GET['plugin'] === 'remote-job-aggregator') {
-        // Get the new version from the request or set it manually
-        $new_version = isset($_GET['version']) ? sanitize_text_field($_GET['version']) : '1.0.2'; // Example new version
-
-        // Update the plugin version
-        update_option('rjobs_version', $new_version);
-
-        // Add any additional update logic here
-        // Example: Replace old files with new ones
-
-        // Redirect to the plugins page after update
-        wp_redirect(admin_url('plugins.php'));
-        exit;
-    }
-}
-
 // Function to check for plugin updates and prompt the user
 function rjobs_check_for_update() {
     $current_version = '1.0.1'; // Set the current version of the plugin
@@ -97,5 +79,67 @@ function rjobs_check_for_update() {
             </div>
             <?php
         });
+
+        // Handle the update request
+        if (isset($_GET['action']) && $_GET['action'] === 'update' && isset($_GET['plugin']) && $_GET['plugin'] === 'remote-job-aggregator') {
+            // Get the new version from the request
+            $new_version = isset($_GET['version']) ? sanitize_text_field($_GET['version']) : $current_version;
+
+            // Update the plugin version
+            update_option('rjobs_version', $new_version);
+
+            // Add any additional update logic here
+            // Example: Replace old files with new ones
+
+            // Redirect to the plugins page after update
+            wp_redirect(admin_url('plugins.php'));
+            exit;
+        }
+    }
+}
+
+// Multisite Network Support for Updates
+if (is_multisite()) {
+    add_action('network_admin_menu', 'rjobs_network_admin_menu');
+    add_action('network_admin_init', 'rjobs_network_check_for_update');
+
+    function rjobs_network_admin_menu() {
+        // Add a network admin menu item if needed
+    }
+
+    function rjobs_network_check_for_update() {
+        $current_version = '1.0.1'; // Set the current version of the plugin
+        $installed_version = get_site_option('rjobs_version');
+
+        if ($installed_version && version_compare($installed_version, $current_version, '<')) {
+            add_action('network_admin_notices', function() use ($installed_version, $current_version) {
+                ?>
+                <div class="notice notice-warning is-dismissible">
+                    <p><?php echo sprintf(
+                        'A new version (%s) of the Remote Job Aggregator plugin is available. Your current version is %s. <a href="%s">Click here to update.</a>',
+                        esc_html($current_version),
+                        esc_html($installed_version),
+                        esc_url(network_admin_url('plugins.php?action=update&plugin=remote-job-aggregator&version=' . urlencode($current_version)))
+                    ); ?></p>
+                </div>
+                <?php
+            });
+
+            // Handle the update request
+            if (isset($_GET['action']) && $_GET['action'] === 'update' && isset($_GET['plugin']) && $_GET['plugin'] === 'remote-job-aggregator') {
+                // Get the new version from the request
+                $new_version = isset($_GET['version']) ? sanitize_text_field($_GET['version']) : $current_version;
+
+                // Update the plugin version
+                update_site_option('rjobs_version', $new_version);
+
+                // Add any additional update logic here
+                // Example: Replace old files with new ones
+
+                // Redirect to the plugins page after update
+                wp_redirect(network_admin_url('plugins.php'));
+                exit;
+            }
+        }
     }
 }
