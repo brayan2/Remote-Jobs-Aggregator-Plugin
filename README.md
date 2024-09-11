@@ -17,3 +17,6 @@ Instructions on how to install and configure the plugin.
 ## License
 This plugin is licensed under [MIT License](LICENSE).
 
+## Changelog
+= 1.0.1 =
+* Added Company Name to Normal Links.
