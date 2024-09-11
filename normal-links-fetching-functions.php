@@ -437,10 +437,13 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     }
 
 
-
-                    // Define the base URL from the job URL
+                   // Define the base URL from the job URL
                     $base_url = parse_url($job_url);
                     $base_url = $base_url['scheme'] . '://' . $base_url['host']; // e.g., https://example.com
+
+                    // Placeholder URL
+                    $placeholder_logo_url = 'https://jobs.bgathuita.com/wp-content/uploads/sites/2/2024/09/logo-placeholder-image.png';
+
                     // Fetch company logo URL
                     foreach ($job_company_logo_classes as $class) {
                         $job_company_logo_elements = $job_xpath->query("//img[contains(@class, '$class')]");
@@ -449,11 +452,13 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             foreach ($job_company_logo_elements as $element) {
                                 $src = $element->getAttribute('src');
                                 $data_src = $element->getAttribute('data-src');
+                                $data_lazyload = $element->getAttribute('data-lazyload');
 
                                 // Log details about the image found
                                 error_log('Remote Job Aggregator: Checking node with class: ' . $class);
                                 error_log('Remote Job Aggregator: Found src: ' . $src);
                                 error_log('Remote Job Aggregator: Found data-src: ' . $data_src);
+                                error_log('Remote Job Aggregator: Found data-lazyload: ' . $data_lazyload);
 
                                 // Check src attribute
                                 if (!empty($src) && strpos($src, 'data:image/gif') === false && strpos($src, 'data:') === false) {
@@ -474,28 +479,38 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                                     }
                                     break 2; // Exit both foreach loops as we found a valid image
                                 }
+
+                                // Check data-lazyload attribute if src and data-src are not valid
+                                if (!empty($data_lazyload) && strpos($data_lazyload, 'data:image/gif') === false && strpos($data_lazyload, 'data:') === false) {
+                                    $job_company_logo_url = urldecode($data_lazyload);
+                                    if (parse_url($job_company_logo_url, PHP_URL_SCHEME) === null) {
+                                        // URL is relative, prepend the base URL
+                                        $job_company_logo_url = $base_url . $job_company_logo_url;
+                                    }
+                                    break 2; // Exit both foreach loops as we found a valid image
+                                }
                             }
 
-                            if (!empty($job_company_logo_url)) {
-                                // Convert to absolute URL if necessary
-                                $job_company_logo_url = adjust_job_link($job_url, $job_company_logo_url);
-
-                                // Log the fetched company logo URL and class used
-                                error_log("Fetched company logo URL: $job_company_logo_url using class: $class");
-
-                                
-                                break; // Stop checking classes once company logo is found and uploaded
-                            } else {
-                                // Log if no elements were found with the current class
-                                error_log("No company logo found using class: $class");
+                            // If no valid logo URL is found, use the placeholder URL
+                            if (empty($job_company_logo_url)) {
+                                $job_company_logo_url = $placeholder_logo_url;
                             }
+
+                            // Convert to absolute URL if necessary
+                            $job_company_logo_url = adjust_job_link($job_url, $job_company_logo_url);
+
+                            // Log the fetched company logo URL and class used
+                            error_log("Fetched company logo URL: $job_company_logo_url using class: $class");
+
+                            break; // Stop checking classes once company logo is found and uploaded
+                        } else {
+                            // Log if no elements were found with the current class
+                            error_log("No company logo found using class: $class");
                         }
                     }
 
-  
 
-
-                  // Fetch job application URL
+                   // Fetch job application URL
                     foreach ($job_application_url_classes as $class) {
                         $job_application_url_elements = $job_xpath->query("//*[contains(@class, '$class')]/@href");
                         if ($job_application_url_elements && $job_application_url_elements->length > 0) {
@@ -656,22 +671,29 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
  * Adjust job link based on the main job list link.
  */
 function adjust_job_link($job_list_link, $job_link) {
-    // Check if the job link is relative and make it absolute
+    // Check if the job link is an absolute URL
     if (strpos($job_link, 'http') === false) {
-        // Handle specific cases like the waivly link
-        if (strpos($job_list_link, 'work.waivly.com') !== false && strpos($job_list_link, '/job-location-category/international') !== false) {
-            $base_url = 'https://work.waivly.com';
-            $job_link = $base_url . '/' . ltrim($job_link, '/');
+        // Extract scheme and host from job_list_link to construct the base URL
+        $parsed_url = parse_url($job_list_link);
+        $base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
+
+        // Check if the job link is a relative path and prepend the base URL
+        if (strpos($job_link, '/') === 0) {
+            $job_link = rtrim($job_list_link, '/') . '/' . ltrim($job_link, '/');
         } else {
-            // Generic case for other links
-            $parsed_url = parse_url($job_list_link);
-            $base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
+            // If the job link is not a relative path, prepend base URL
             $job_link = $base_url . '/' . ltrim($job_link, '/');
         }
+    } else {
+        // If job_link is already an absolute URL, use it as-is
+        $job_link = $job_link;
     }
 
     return $job_link;
 }
+
+
+
 
 
 // Check if a job already exists in WP Job Manager based on application URL.
@@ -703,6 +725,4 @@ function rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url = '
         return null; // Return null if the job does not exist
     }
 }
-
-
 
