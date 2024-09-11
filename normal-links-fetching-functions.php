@@ -200,7 +200,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         $link_indexes[$index]++;
                         continue; // Skip to next job URL
                     }
-                    
+
 
                     $job_body = wp_remote_retrieve_body($job_response);
 
@@ -284,7 +284,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                                 if (strtolower($job_company_name) !== 'about') {
                                     $job_company_name = $job_company_name;
                                     error_log("Company name fetched: $job_company_name using class: $class");
-                                    break 2; // Stop checking both elements and classes once a valid company name is found
+                                    break 2; // Stop checking once a valid company name is found
                                 } else {
                                     // Log if the current element's value is "about"
                                     error_log("Company name labeled as 'about' found using class: $class");
@@ -305,13 +305,27 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             // Decode the JSON content
                             $json_data = json_decode($json_content, true);
 
-                            // Check if the JSON-LD contains "hiringOrganization" with "@type" as "Organization" and "name" field
-                            if (isset($json_data['hiringOrganization']['@type']) 
-                                && $json_data['hiringOrganization']['@type'] === 'Organization' 
-                                && isset($json_data['hiringOrganization']['name'])) {
-                                $job_company_name = $json_data['hiringOrganization']['name'];
-                                error_log("Company name fetched from schema: $job_company_name");
-                                break; // Stop after finding the first matching schema
+                            // Handle cases where the JSON-LD may be an array
+                            if (is_array($json_data)) {
+                                // Loop through if there are multiple JSON-LD items in the script
+                                foreach ($json_data as $json_item) {
+                                    if (isset($json_item['hiringOrganization']['@type']) 
+                                        && $json_item['hiringOrganization']['@type'] === 'Organization' 
+                                        && isset($json_item['hiringOrganization']['name'])) {
+                                        $job_company_name = $json_item['hiringOrganization']['name'];
+                                        error_log("Company name fetched from schema: $job_company_name");
+                                        break 2; // Stop after finding the first matching schema
+                                    }
+                                }
+                            } else {
+                                // Single JSON-LD object handling
+                                if (isset($json_data['hiringOrganization']['@type']) 
+                                    && $json_data['hiringOrganization']['@type'] === 'Organization' 
+                                    && isset($json_data['hiringOrganization']['name'])) {
+                                    $job_company_name = $json_data['hiringOrganization']['name'];
+                                    error_log("Company name fetched from schema: $job_company_name");
+                                    break; // Stop after finding the first matching schema
+                                }
                             }
                         }
 
@@ -323,6 +337,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
 
                     // Final logging of company name
                     error_log("Final Company Name: $job_company_name");
+
 
                 
                     // Fetch job types
