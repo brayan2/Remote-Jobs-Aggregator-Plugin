@@ -6,7 +6,7 @@ Description: Fetches remote jobs from various RSS feeds and displays them on you
 Version: 1.0.1
 Author: Brian Gathuita
 Author URI: https://bgathuita.com
-RequiresWP: 6.0
+RequiresWP: 5.8
 RequiresPHP: 7.4
 */
 
