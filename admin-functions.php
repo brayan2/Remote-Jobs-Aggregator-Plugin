@@ -72,7 +72,7 @@ function rjobs_main_settings_page() {
         update_option('rjobs_fetch_source', $fetch_source); // Save fetch source option
 
         // Schedule or reschedule cron job based on new settings
-        rjobs_schedule_cron();
+        rjobs_schedule_cron(); 
 
         echo '<div class="notice notice-success is-dismissible"><p>Settings saved successfully!</p></div>';
     }
