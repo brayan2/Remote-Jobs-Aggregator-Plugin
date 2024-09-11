@@ -98,6 +98,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
             // Extract classes for job details
             $job_link_classes = explode(',', $settings['job_link_classes'] ?? '');
             $job_title_classes = explode(',', $settings['job_title_field'] ?? '');
+            $job_company_name_classes = explode(',', $settings['job_company_name_field'] ?? ''); 
             $job_type_classes = explode(',', $settings['job_type_field'] ?? '');
             $job_description_classes = explode(',', $settings['job_description_field'] ?? '');
             $job_company_logo_classes = explode(',', $settings['job_company_logo_field'] ?? '');
@@ -257,6 +258,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     $job_title = '';
                     $job_description = '';
                     $job_application_url = '';
+                    $job_company_name = '';
                     $found_job_types = array();
 
                     // Fetch job title
@@ -271,6 +273,56 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             error_log("No job title found using class: $class");
                         }
                     }
+
+                
+                    foreach ($job_company_name_classes as $class) {
+                        $company_name_elements = $job_xpath->query("//*[contains(@class, '$class')]");
+                        if ($company_name_elements && $company_name_elements->length > 0) {
+                            foreach ($company_name_elements as $element) {
+                                $job_company_name = trim($element->nodeValue);
+                                if (strtolower($job_company_name) !== 'about') {
+                                    $job_company_name = $job_company_name;
+                                    error_log("Company name fetched: $job_company_name using class: $class");
+                                    break 2; // Stop checking both elements and classes once a valid company name is found
+                                } else {
+                                    // Log if the current element's value is "about"
+                                    error_log("Company name labeled as 'about' found using class: $class");
+                                }
+                            }
+                        } else {
+                            // Log if no elements were found with the current class
+                            error_log("No company name found using class: $class");
+                        }
+                    }
+
+                    // If no company name was found using HTML classes, try extracting it from JSON-LD schema
+                    if (empty($job_company_name)) {
+                        // Fetch all <script> elements with type "application/ld+json"
+                        $json_ld_elements = $job_xpath->query("//script[@type='application/ld+json']");
+                        foreach ($json_ld_elements as $json_ld_element) {
+                            $json_content = $json_ld_element->nodeValue;
+                            // Decode the JSON content
+                            $json_data = json_decode($json_content, true);
+
+                            // Check if the JSON-LD contains "hiringOrganization" with "@type" as "Organization" and "name" field
+                            if (isset($json_data['hiringOrganization']['@type']) 
+                                && $json_data['hiringOrganization']['@type'] === 'Organization' 
+                                && isset($json_data['hiringOrganization']['name'])) {
+                                $job_company_name = $json_data['hiringOrganization']['name'];
+                                error_log("Company name fetched from schema: $job_company_name");
+                                break; // Stop after finding the first matching schema
+                            }
+                        }
+
+                        // If no company name was found in the schema, log the result
+                        if (empty($job_company_name)) {
+                            error_log("No company name found in schema.");
+                        }
+                    }
+
+                    // Final logging of company name
+                    error_log("Final Company Name: $job_company_name");
+
                 
                     // Fetch job types
                     foreach ($job_type_classes as $class) {
@@ -469,6 +521,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     if (empty($job_title) || empty($job_description)) {
                         error_log("Missing job details for job link: $job_url. 
                             Job Title Classes: " . json_encode($job_title_classes) . ", 
+                            Job Company Name Classes: " . json_encode($job_company_name_classes) . ", 
                             Job Description Classes: " . json_encode($job_description_classes) . ", 
                             Job Application URL Classes: " . json_encode($job_application_url_classes));
                         $link_indexes[$index]++;
@@ -493,7 +546,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         'ping_status' => 'closed',
                         'meta_input' => array(
                             '_application' => sanitize_text_field($job_application_url), // Use sanitize_text_field to handle both email and URL
-                            
+                            '_company_name'  => sanitize_text_field($job_company_name),
                         )
                     );
 

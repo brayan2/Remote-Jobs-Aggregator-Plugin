@@ -129,6 +129,7 @@ function rjobs_normal_links_settings_page() {
             'job_list_link' => 'https://euremotejobs.com/job-region/remote-jobs-worldwide/',
             'job_link_classes' => 'job_listing-clickbox',
             'job_title_field' => 'page-title',
+            'job_company_name_field' => 'job-company',
             'job_type_field' => 'job-type',
             'job_description_field' => 'col-sm-12',
             'job_company_logo_field' => 'company_logo',
@@ -139,6 +140,7 @@ function rjobs_normal_links_settings_page() {
             'job_list_link' => 'https://work.waivly.com/job-location-category/worldwide',
             'job_link_classes' => 'card job featured w-inline-block',
             'job_title_field' => 'title h2-size card-job-post',
+            'job_company_name_field' => 'title h4-size card-job-post-sidebar-about-company',
             'job_type_field' => 'card-job-post-category-text',
             'job_description_field' => 'card-job-post-content-bottom',
             'job_company_logo_field' => 'image card-job-post-logo',
@@ -149,6 +151,7 @@ function rjobs_normal_links_settings_page() {
             'job_list_link' => 'https://nodesk.co/remote-jobs/remote-first/',
             'job_link_classes' => 'link dim indigo-700',
             'job_title_field' => 'dn db-ns f3 grey-900 lh-title mb9 mt0',
+            'job_company_name_field' => 'f6 f3-ns fw4 fw6-ns mb2 mt3 mv0-ns',
             'job_type_field' => 'link dim grey-700',
             'job_description_field' => 'grey-800',
             'job_company_logo_field' => 'bg-white br-100 lazyload mr4-ns shadow-1 shadow-2-ns w9',
@@ -159,6 +162,7 @@ function rjobs_normal_links_settings_page() {
             'job_list_link' => 'https://remote.co/international-remote-jobs/',
             'job_link_classes' => 'card m-0 border-left-0 border-right-0 border-top-0 border-bottom',
             'job_title_field' => 'font-weight-bold',
+            'job_company_name_field' => 'co_name',
             'job_type_field' => 'job_flag',
             'job_description_field' => 'job_description',
             'job_company_logo_field' => 'job_company_logo',
@@ -173,6 +177,7 @@ function rjobs_normal_links_settings_page() {
             'job_list_link' => sanitize_text_field($_POST['rjobs_job_list_link']),
             'job_link_classes' => sanitize_textarea_field($_POST['rjobs_job_link_classes']),
             'job_title_field' => sanitize_textarea_field($_POST['rjobs_job_title_field']),
+            'job_company_name_field' => sanitize_textarea_field($_POST['rjobs_job_company_name_field']),
             'job_type_field' => sanitize_textarea_field($_POST['rjobs_job_type_field']),
             'job_description_field' => sanitize_textarea_field($_POST['rjobs_job_description_field']),
             'job_company_logo_field' => sanitize_textarea_field($_POST['rjobs_job_company_logo_field']),
@@ -216,6 +221,7 @@ function rjobs_normal_links_settings_page() {
                 'job_list_link' => sanitize_text_field($_POST['rjobs_job_list_link']),
                 'job_link_classes' => sanitize_textarea_field($_POST['rjobs_job_link_classes']),
                 'job_title_field' => sanitize_textarea_field($_POST['rjobs_job_title_field']),
+                'job_company_name_field' => sanitize_textarea_field($_POST['rjobs_job_company_name_field']),
                 'job_type_field' => sanitize_textarea_field($_POST['rjobs_job_type_field']),
                 'job_description_field' => sanitize_textarea_field($_POST['rjobs_job_description_field']),
                 'job_company_logo_field' => sanitize_textarea_field($_POST['rjobs_job_company_logo_field']),
@@ -629,7 +635,6 @@ function rjobs_normal_links_settings_page() {
 
 
     // Display custom links
-    // Display custom links
 
         echo '<h3>Custom Links</h3>';
 
@@ -688,6 +693,7 @@ function rjobs_normal_links_settings_page() {
                     <th>Job List Link</th>
                     <th>Job Link</th>
                     <th>Job Title</th>
+                    <th>Job Company Name</th>
                     <th>Job Type</th>
                     <th>Job Description</th>
                     <th>Company Logo</th>
@@ -709,6 +715,7 @@ function rjobs_normal_links_settings_page() {
                 echo '<td><a href="' . esc_url($link_settings['job_list_link']) . '" target="_blank">' . esc_html($link_settings['job_list_link']) . '</a></td>';
                 echo '<td>' . esc_html($link_settings['job_link_classes']) . '</td>';
                 echo '<td>' . esc_html($link_settings['job_title_field']) . '</td>';
+                echo '<td>' . esc_html($link_settings['job_company_name_field']) . '</td>';
                 echo '<td>' . esc_html($link_settings['job_type_field']) . '</td>';
                 echo '<td>' . esc_html($link_settings['job_description_field']) . '</td>';
                 echo '<td>' . esc_html($link_settings['job_company_logo_field']) . '</td>';
@@ -753,6 +760,8 @@ function rjobs_normal_links_settings_page() {
         echo '            <textarea name="rjobs_job_link_classes" id="rjobs_job_link_classes" required></textarea>';
         echo '            <label for="rjobs_job_title_field">Job Title Field<span>*</span></label>';
         echo '            <textarea name="rjobs_job_title_field" id="rjobs_job_title_field" required></textarea>';
+        echo '            <label for="rjobs_job_company_name_field">Job Company Name Field</label>';
+        echo '            <textarea name="rjobs_job_company_name_field" id="rjobs_job_company_name_field" ></textarea>';
         echo '            <label for="rjobs_job_type_field">Job Type Field<span>*</span></label>';
         echo '            <textarea name="rjobs_job_type_field" id="rjobs_job_type_field" required></textarea>';
         echo '            <label for="rjobs_job_description_field">Job Description Field<span>*</span></label>';
@@ -820,6 +829,7 @@ function rjobs_normal_links_settings_page() {
                     document.getElementById("rjobs_job_list_link").value = linkData.job_list_link || "";
                     document.getElementById("rjobs_job_link_classes").value = linkData.job_link_classes || "";
                     document.getElementById("rjobs_job_title_field").value = linkData.job_title_field || "";
+                    document.getElementById("rjobs_job_company_name_field").value = linkData.job_company_name_field || "";
                     document.getElementById("rjobs_job_type_field").value = linkData.job_type_field || "";
                     document.getElementById("rjobs_job_description_field").value = linkData.job_description_field || "";
                     document.getElementById("rjobs_job_company_logo_field").value = linkData.job_company_logo_field || "";
@@ -998,7 +1008,7 @@ function rjobs_export_links() {
     $output = fopen('php://output', 'w');
 
     // Add CSV column headers
-    fputcsv($output, array('Domain Name', 'Job List Link', 'Job Link Classes', 'Job Title Field', 'Job Type Field', 'Job Description Field', 'Company Logo', 'Job Application URL Field'));
+    fputcsv($output, array('Domain Name', 'Job List Link', 'Job Link Classes', 'Job Title Field', 'Job Company Name Field', 'Job Type Field', 'Job Description Field', 'Company Logo', 'Job Application URL Field'));
 
     // Add data rows
     if (!empty($custom_links_settings)) {
@@ -1009,6 +1019,7 @@ function rjobs_export_links() {
                 $link_settings['job_list_link'],
                 $link_settings['job_link_classes'],
                 $link_settings['job_title_field'],
+                $link_settings['job_company_name_field'],
                 $link_settings['job_type_field'],
                 $link_settings['job_description_field'],
                 $link_settings['job_company_logo_field'],
@@ -1084,10 +1095,11 @@ function rjobs_import_links() {
                     'job_list_link' => $data[1],
                     'job_link_classes' => $data[2],
                     'job_title_field' => $data[3],
-                    'job_type_field' => $data[4],
-                    'job_description_field' => $data[5],
-                    'job_company_logo_field' => $data[6],
-                    'job_application_url_field' => $data[7]
+                    'job_company_name_field' => $data[4],
+                    'job_type_field' => $data[5],
+                    'job_description_field' => $data[6],
+                    'job_company_logo_field' => $data[7],
+                    'job_application_url_field' => $data[8]
                 );
                 $existing_domains[] = $domain_name; // Add to existing domains to avoid duplicates in this import session
                 $new_domain_count++; // Increment the new domain count
