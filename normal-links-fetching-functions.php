@@ -200,6 +200,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         $link_indexes[$index]++;
                         continue; // Skip to next job URL
                     }
+                    
 
                     $job_body = wp_remote_retrieve_body($job_response);
 
