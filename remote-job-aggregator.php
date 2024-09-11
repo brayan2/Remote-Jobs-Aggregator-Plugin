@@ -3,7 +3,7 @@
 Plugin Name: Remote Job Aggregator
 Plugin URI: https://bgathuita.com
 Description: Fetches remote jobs from various RSS feeds and displays them on your WordPress site
-Version: 1.0.1
+Version: 1.0.1  
 Author: Brian Gathuita
 Author URI: https://bgathuita.com
 RequiresWP: 5.8
@@ -65,36 +65,34 @@ function rjobs_update_function() {
 function rjobs_check_for_update() {
     $current_version = '1.0.1'; // Set the current version of the plugin
     $installed_version = get_option('rjobs_version');
+    
+    // Always prompt the user to replace the plugin
+    add_action('admin_notices', function() use ($installed_version, $current_version) {
+        ?>
+        <div class="notice notice-warning is-dismissible">
+            <p><?php echo sprintf(
+                'The Remote Job Aggregator plugin is available for replacement. Your current version is %s. <a href="%s">Click here to replace with the new version.</a>',
+                esc_html($installed_version),
+                esc_url(admin_url('plugins.php?action=update&plugin=remote-job-aggregator&version=' . urlencode($current_version)))
+            ); ?></p>
+        </div>
+        <?php
+    });
 
-    if ($installed_version && version_compare($installed_version, $current_version, '<')) {
-        add_action('admin_notices', function() use ($installed_version, $current_version) {
-            ?>
-            <div class="notice notice-warning is-dismissible">
-                <p><?php echo sprintf(
-                    'A new version (%s) of the Remote Job Aggregator plugin is available. Your current version is %s. <a href="%s">Click here to update.</a>',
-                    esc_html($current_version),
-                    esc_html($installed_version),
-                    esc_url(admin_url('plugins.php?action=update&plugin=remote-job-aggregator&version=' . urlencode($current_version)))
-                ); ?></p>
-            </div>
-            <?php
-        });
+    // Handle the update request
+    if (isset($_GET['action']) && $_GET['action'] === 'update' && isset($_GET['plugin']) && $_GET['plugin'] === 'remote-job-aggregator') {
+        // Get the new version from the request
+        $new_version = isset($_GET['version']) ? sanitize_text_field($_GET['version']) : $current_version;
 
-        // Handle the update request
-        if (isset($_GET['action']) && $_GET['action'] === 'update' && isset($_GET['plugin']) && $_GET['plugin'] === 'remote-job-aggregator') {
-            // Get the new version from the request
-            $new_version = isset($_GET['version']) ? sanitize_text_field($_GET['version']) : $current_version;
+        // Update the plugin version
+        update_option('rjobs_version', $new_version);
 
-            // Update the plugin version
-            update_option('rjobs_version', $new_version);
+        // Add any additional update logic here
+        // Example: Replace old files with new ones
 
-            // Add any additional update logic here
-            // Example: Replace old files with new ones
-
-            // Redirect to the plugins page after update
-            wp_redirect(admin_url('plugins.php'));
-            exit;
-        }
+        // Redirect to the plugins page after update
+        wp_redirect(admin_url('plugins.php'));
+        exit;
     }
 }
 
@@ -110,36 +108,34 @@ if (is_multisite()) {
     function rjobs_network_check_for_update() {
         $current_version = '1.0.1'; // Set the current version of the plugin
         $installed_version = get_site_option('rjobs_version');
+        
+        // Always prompt the user to replace the plugin
+        add_action('network_admin_notices', function() use ($installed_version, $current_version) {
+            ?>
+            <div class="notice notice-warning is-dismissible">
+                <p><?php echo sprintf(
+                    'The Remote Job Aggregator plugin is available for replacement. Your current version is %s. <a href="%s">Click here to replace with the new version.</a>',
+                    esc_html($installed_version),
+                    esc_url(network_admin_url('plugins.php?action=update&plugin=remote-job-aggregator&version=' . urlencode($current_version)))
+                ); ?></p>
+            </div>
+            <?php
+        });
 
-        if ($installed_version && version_compare($installed_version, $current_version, '<')) {
-            add_action('network_admin_notices', function() use ($installed_version, $current_version) {
-                ?>
-                <div class="notice notice-warning is-dismissible">
-                    <p><?php echo sprintf(
-                        'A new version (%s) of the Remote Job Aggregator plugin is available. Your current version is %s. <a href="%s">Click here to update.</a>',
-                        esc_html($current_version),
-                        esc_html($installed_version),
-                        esc_url(network_admin_url('plugins.php?action=update&plugin=remote-job-aggregator&version=' . urlencode($current_version)))
-                    ); ?></p>
-                </div>
-                <?php
-            });
+        // Handle the update request
+        if (isset($_GET['action']) && $_GET['action'] === 'update' && isset($_GET['plugin']) && $_GET['plugin'] === 'remote-job-aggregator') {
+            // Get the new version from the request
+            $new_version = isset($_GET['version']) ? sanitize_text_field($_GET['version']) : $current_version;
 
-            // Handle the update request
-            if (isset($_GET['action']) && $_GET['action'] === 'update' && isset($_GET['plugin']) && $_GET['plugin'] === 'remote-job-aggregator') {
-                // Get the new version from the request
-                $new_version = isset($_GET['version']) ? sanitize_text_field($_GET['version']) : $current_version;
+            // Update the plugin version
+            update_site_option('rjobs_version', $new_version);
 
-                // Update the plugin version
-                update_site_option('rjobs_version', $new_version);
+            // Add any additional update logic here
+            // Example: Replace old files with new ones
 
-                // Add any additional update logic here
-                // Example: Replace old files with new ones
-
-                // Redirect to the plugins page after update
-                wp_redirect(network_admin_url('plugins.php'));
-                exit;
-            }
+            // Redirect to the plugins page after update
+            wp_redirect(network_admin_url('plugins.php'));
+            exit;
         }
     }
 }
