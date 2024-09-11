@@ -2,7 +2,7 @@
 /*
 Plugin Name: Remote Job Aggregator
 Plugin URI: https://bgathuita.com
-Description: Fetches remote jobs from various RSS feeds and displays them on your WordPress site
+Description: Fetches remote jobs from various RSS feeds and custom links, and displays them on your WordPress site.
 Version: 1.0.1
 Author: Brian Gathuita
 Author URI: https://bgathuita.com
@@ -25,6 +25,7 @@ add_action('admin_menu', 'rjobs_admin_menu');
 add_action('admin_enqueue_scripts', 'rjobs_admin_scripts');
 add_action('wp_ajax_rjobs_bulk_action', 'rjobs_bulk_action');
 add_action('admin_init', 'rjobs_check_for_update'); // Check for plugin updates
+add_filter('auto_update_plugin', 'rjobs_enable_auto_update', 10, 2); // Enable auto-updates
 
 // Plugin activation hook
 register_activation_hook(__FILE__, 'rjobs_activate_plugin');
@@ -145,4 +146,45 @@ function rjobs_init() {
     // Your initialization code here
     add_action('rjobs_fetch_jobs_cron', 'rjobs_fetch_jobs_cron');
     rjobs_schedule_cron(); // Example: Schedule cron job on init
+}
+
+// Function to enable auto-updates for the plugin
+function rjobs_enable_auto_update($update, $item) {
+    if (isset($item->slug) && $item->slug === 'remote-job-aggregator') {
+        return true; // Enable auto-updates for the Remote Job Aggregator plugin
+    }
+    return $update;
+}
+
+// Function to check for existing folders starting with "Remote-Jobs-Aggregator"
+add_filter('upgrader_pre_install', 'rjobs_pre_install', 10, 3);
+
+function rjobs_pre_install($response, $hook_extra = null, $result = null) {
+    // The uploaded plugin directory
+    $plugin_dir = WP_PLUGIN_DIR;
+
+    // Check for existing plugin folders that start with 'Remote-Jobs-Aggregator'
+    $plugin_name_base = 'Remote-Jobs-Aggregator';
+
+    $existing_folders = glob($plugin_dir . '/' . $plugin_name_base . '*', GLOB_ONLYDIR);
+
+    // If any folder exists with a similar naming convention, prompt the replacement
+    if (!empty($existing_folders)) {
+        // Add admin notice for replacement prompt
+        add_action('admin_notices', function() use ($existing_folders) {
+            ?>
+            <div class="notice notice-warning is-dismissible">
+                <p><?php echo sprintf(
+                    'A folder starting with "Remote-Jobs-Aggregator" already exists: %s. Please ensure you want to replace it.',
+                    implode(', ', array_map('basename', $existing_folders))
+                ); ?></p>
+            </div>
+            <?php
+        });
+
+        // Halt the installation
+        return new WP_Error('plugin_exists', 'Plugin with a similar name already exists.');
+    }
+
+    return $response;
 }
