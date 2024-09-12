@@ -260,6 +260,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     $job_description = '';
                     $job_application_url = '';
                     $job_company_name = '';
+                    $job_company_url = ''; 
                     $found_job_types = array();
 
                     // Fetch job title
@@ -339,6 +340,173 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     error_log("Final Company Name: $job_company_name");
 
 
+
+
+                    // Define a list of social media domains to exclude for company URLs
+                    $social_media_domains = ['facebook.com', 'twitter.com', 'linkedin.com'];
+
+                    $json_ld_elements = $job_xpath->query("//script[@type='application/ld+json']");
+                    foreach ($json_ld_elements as $json_ld_element) {
+                        $json_content = $json_ld_element->nodeValue;
+                        // Decode the JSON content
+                        $json_data = json_decode($json_content, true);
+
+                        // Handle cases where the JSON-LD may be an array
+                        if (is_array($json_data)) {
+                            // Loop through if there are multiple JSON-LD items in the script
+                            foreach ($json_data as $json_item) {
+                                if (isset($json_item['sameAs'])) {
+                                    $sameAs = $json_item['sameAs'];
+
+                                    // Check if sameAs is an array or a string
+                                    if (is_array($sameAs)) {
+                                        foreach ($sameAs as $company_url) {
+                                            $is_social_media = false;
+
+                                            // Validate the company URL to exclude social media links
+                                            foreach ($social_media_domains as $domain) {
+                                                if (strpos($company_url, $domain) !== false) {
+                                                    $is_social_media = true;
+                                                    break;
+                                                }
+                                            }
+
+                                            // If it's not a social media link, assign the company URL
+                                            if (!$is_social_media) {
+                                                $job_company_url = $company_url;
+                                                error_log("Company website fetched from schema: $job_company_url");
+                                                break 2; // Stop after finding the first valid company URL
+                                            } else {
+                                                error_log("Excluded social media URL from schema: $company_url");
+                                            }
+                                        }
+                                    } else {
+                                        // Handle case where sameAs is a single URL string
+                                        $company_url = $sameAs;
+                                        $is_social_media = false;
+
+                                        // Validate the company URL to exclude social media links
+                                        foreach ($social_media_domains as $domain) {
+                                            if (strpos($company_url, $domain) !== false) {
+                                                $is_social_media = true;
+                                                break;
+                                            }
+                                        }
+
+                                        // If it's not a social media link, assign the company URL
+                                        if (!$is_social_media) {
+                                            $job_company_url = $company_url;
+                                            error_log("Company website fetched from schema: $job_company_url");
+                                            break 2; // Stop after finding the first valid company URL
+                                        } else {
+                                            error_log("Excluded social media URL from schema: $company_url");
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Handle single JSON-LD object
+                            if (isset($json_data['sameAs'])) {
+                                $sameAs = $json_data['sameAs'];
+
+                                // Check if sameAs is an array or a string
+                                if (is_array($sameAs)) {
+                                    foreach ($sameAs as $company_url) {
+                                        $is_social_media = false;
+
+                                        // Validate the company URL to exclude social media links
+                                        foreach ($social_media_domains as $domain) {
+                                            if (strpos($company_url, $domain) !== false) {
+                                                $is_social_media = true;
+                                                break;
+                                            }
+                                        }
+
+                                        // If it's not a social media link, assign the company URL
+                                        if (!$is_social_media) {
+                                            $job_company_url = $company_url;
+                                            error_log("Company website fetched from schema: $job_company_url");
+                                            break 2; // Stop after finding the first valid company URL
+                                        } else {
+                                            error_log("Excluded social media URL from schema: $company_url");
+                                        }
+                                    }
+                                } else {
+                                    // Handle case where sameAs is a single URL string
+                                    $company_url = $sameAs;
+                                    $is_social_media = false;
+
+                                    // Validate the company URL to exclude social media links
+                                    foreach ($social_media_domains as $domain) {
+                                        if (strpos($company_url, $domain) !== false) {
+                                            $is_social_media = true;
+                                            break;
+                                        }
+                                    }
+
+                                    // If it's not a social media link, assign the company URL
+                                    if (!$is_social_media) {
+                                        $job_company_url = $company_url;
+                                        error_log("Company website fetched from schema: $job_company_url");
+                                        break; // Stop after finding the first valid company URL
+                                    } else {
+                                        error_log("Excluded social media URL from schema: $company_url");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Log the result if no valid company URL was found from schema
+                    if (empty($job_company_url)) {
+                        error_log("No valid company website found in schema.");
+
+                        // Fallback: Search for company URL using defined HTML classes
+                        $company_url_classes = [
+                            'w-richtext',
+                            'ppma-author-user_url-profile-data ppma-author-field-meta ppma-author-field-type-url'
+                        ];
+
+                        // Fetch company URL from HTML classes
+                        foreach ($company_url_classes as $class) {
+                            $company_url_elements = $job_xpath->query("//*[contains(@class, '$class')]/@href");
+                            foreach ($company_url_elements as $element) {
+                                $company_url = trim($element->nodeValue);
+                                $is_social_media = false;
+
+                                // Validate the company URL to exclude social media links
+                                foreach ($social_media_domains as $domain) {
+                                    if (strpos($company_url, $domain) !== false) {
+                                        $is_social_media = true;
+                                        break;
+                                    }
+                                }
+                                   // If it's not a social media link, assign the company URL
+                                    if (!$is_social_media) {
+                                        $job_company_url = $company_url;
+                                        error_log("Company website fetched from HTML class: $job_company_url");
+                                        break 2; // Stop after finding the first valid company URL
+                                    } else {
+                                        error_log("Excluded social media URL from HTML class: $company_url");
+                                    }
+                                
+                            }
+                        }
+
+                        // Log the final result if still no valid company URL is found
+                        if (empty($job_company_url)) {
+                            error_log("No valid company website found using HTML class fallback.");
+                        }
+                    }
+
+                    // Output the final company URL
+                    if (!empty($job_company_url)) {
+                        echo "Company URL: " . esc_url($job_company_url);
+                    }
+
+     
+
+
                 
                     // Fetch job types
                     foreach ($job_type_classes as $class) {
@@ -379,31 +547,81 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
 
                     // Determine the primary job type to use (e.g., first in the list)
                     $job_type = !empty($found_job_types) ? $found_job_types[0] : '';
-
-
                     
+
+
                     // Fetch job description
                     foreach ($job_description_classes as $class) {
                         $job_description_elements = $job_xpath->query("//*[contains(@class, '$class')]");
                         if ($job_description_elements && $job_description_elements->length > 0) {
                             $job_description = '';
 
-                            foreach ($job_description_elements as $element) {
-                                // Remove any child elements with the class 'job_application application'
-                                $xpath_child_query = ".//*[contains(@class, 'job_application application')]";
-                                $job_application_elements = $job_xpath->query($xpath_child_query, $element);
+                            // Check if the job listing URL is from remotive.com
+                            if (strpos($job_list_link, 'remotive.com') !== false) {
+                                // Remotive.com-specific logic
+                                foreach ($job_description_elements as $element) {
+                                    // Remove unwanted classes for remotive.com listings
+                                    $exclude_classes = [
+                                        'tw-hidden md:tw-pt-16 tw-p-6 md:tw-items-start md:tw-justify-between md:tw-flex-wrap md:tw-flex md:tw-content-left',
+                                        'remotive-text-smaller',
+                                        'tw-hidden md:tw-block remotive-text-smaller tw-p-4 tw-rounded-b-md tw-text-left remotive-bg-light-blue',
+                                        'remotive-text-smaller remotive-bg-light md:remotive-bg-white tw-mx-auto md:tw-mx-4 tw-mt-4 tw-mb-0 tw-rounded-md',
+                                        'remotive-bg-light tw-mt-2 tw-p-4 tw-rounded-md',
+                                        'h2 remotive-text-bigger',
+                                        'back',
+                                        'remotive-btn-orange',
+                                        'form',
+                                        'tw-mt-4',
+                                        'remotive-bg-light tw-mt-2 tw-p-4 tw-rounded-md'
+                                                
+                                    ];
 
-                                // Remove unwanted elements from the description
-                                foreach ($job_application_elements as $application_element) {
-                                    $application_element->parentNode->removeChild($application_element);
+                                    foreach ($exclude_classes as $exclude_class) {
+                                        $xpath_exclude_query = ".//*[contains(@class, '$exclude_class') or ancestor::*[contains(@class, '$exclude_class')]]";
+                                        $exclude_elements = $job_xpath->query($xpath_exclude_query, $element);
+                                        foreach ($exclude_elements as $exclude_element) {
+                                            $exclude_element->parentNode->removeChild($exclude_element);
+                                        }
+                                    }
+
+                                    // Fetch the inner HTML of each element
+                                    $inner_html = '';
+                                    foreach ($element->childNodes as $child) {
+                                        $inner_html .= $element->ownerDocument->saveHTML($child);
+                                    }
+                                    $job_description .= $inner_html;
                                 }
 
-                                // Fetch the inner HTML of each element
-                                $inner_html = '';
-                                foreach ($element->childNodes as $child) {
-                                    $inner_html .= $element->ownerDocument->saveHTML($child);
+                                // Remove unwanted phrases from Remotive descriptions
+                                $unwanted_phrases = [
+                                    '50% off',
+                                    'in September 2024',
+                                    'By joining now, I confirm that I have read and I accept',
+                                     'Remotive',
+                                    'Code of Conduct'
+                                ];
+                                foreach ($unwanted_phrases as $phrase) {
+                                    $job_description = preg_replace('/' . preg_quote($phrase, '/') . '\s*/i', '', $job_description);
                                 }
-                                $job_description .= $inner_html;
+
+                            } else {
+                                // Original logic for other job links
+                                foreach ($job_description_elements as $element) {
+                                    // Remove any child elements with the class 'job_application application'
+                                    $xpath_child_query = ".//*[contains(@class, 'job_application application')]";
+                                    $job_application_elements = $job_xpath->query($xpath_child_query, $element);
+
+                                    foreach ($job_application_elements as $application_element) {
+                                        $application_element->parentNode->removeChild($application_element);
+                                    }
+
+                                    // Fetch the inner HTML of each element
+                                    $inner_html = '';
+                                    foreach ($element->childNodes as $child) {
+                                        $inner_html .= $element->ownerDocument->saveHTML($child);
+                                    }
+                                    $job_description .= $inner_html;
+                                }
                             }
 
                             // Sanitize and allow safe HTML
@@ -428,6 +646,12 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                                 'h6' => array()
                             );
                             $job_description = wp_kses($job_description, $allowed_html);
+
+                            // Correct encoding issues
+                            $job_description = preg_replace('/\xC2\xA0/', ' ', $job_description); // Replace non-breaking space
+                            $job_description = preg_replace('/Â/', '', $job_description); // Remove stray Â characters
+                            $job_description = preg_replace('/[^\x00-\x7F]/', '', $job_description); // Remove non-ASCII characters
+
                             error_log("Job description fetched and cleaned using class: $class");
                             break; // Stop checking classes once job description is found
                         } else {
@@ -435,6 +659,13 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             error_log("No job description found using class: $class");
                         }
                     }
+
+
+
+
+
+
+
 
 
                    // Define the base URL from the job URL
@@ -578,6 +809,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         'meta_input' => array(
                             '_application' => sanitize_text_field($job_application_url), // Use sanitize_text_field to handle both email and URL
                             '_company_name'  => sanitize_text_field($job_company_name),
+                            '_company_website' => esc_url_raw($job_company_url),
                         )
                     );
 
@@ -691,7 +923,6 @@ function adjust_job_link($job_list_link, $job_link) {
 
     return $job_link;
 }
-
 
 
 
