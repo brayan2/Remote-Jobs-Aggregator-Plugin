@@ -18,5 +18,9 @@ Instructions on how to install and configure the plugin.
 This plugin is licensed under [MIT License](LICENSE).
 
 ## Changelog
-= 1.0.1 =
+= v1.0.1 =
 * Added Company Name to Normal Links.
+
+= v1.0.2 =
+* Added Company Website to Normal Links.
+* Stripped special characters in description of remotive links.
