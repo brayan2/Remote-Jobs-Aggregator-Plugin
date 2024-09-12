@@ -181,6 +181,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         'Part Time',
                         'Temporary'
                     );
+                    $found_job_types = array();
 
                     // Function to normalize job type strings
                     if (!function_exists('normalize_job_type')) {
@@ -341,7 +342,6 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
 
 
 
-
                     // Define a list of social media domains to exclude for company URLs
                     $social_media_domains = ['facebook.com', 'twitter.com', 'linkedin.com'];
 
@@ -456,20 +456,24 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             }
                         }
                     }
-
                     // Log the result if no valid company URL was found from schema
                     if (empty($job_company_url)) {
                         error_log("No valid company website found in schema.");
 
                         // Fallback: Search for company URL using defined HTML classes
                         $company_url_classes = [
+                            'links_sm', // This class should be included to match the example provided
                             'w-richtext',
-                            'ppma-author-user_url-profile-data ppma-author-field-meta ppma-author-field-type-url'
+                            'dib link dim grey-700',
+                            'ppma-author-user_url-profile-data ppma-author-field-meta ppma-author-field-type-url',
+                            'flex flex-wrap items-center gap-1 text-sm',
+                            'text-justify prose max-w-none'
                         ];
 
-                        // Fetch company URL from HTML classes
+                        // Fetch company URL from HTML classes as a fallback
                         foreach ($company_url_classes as $class) {
-                            $company_url_elements = $job_xpath->query("//*[contains(@class, '$class')]/@href");
+                            // Query for <a> tags within elements with the class
+                            $company_url_elements = $job_xpath->query("//*[contains(@class, '$class')]//a/@href");
                             foreach ($company_url_elements as $element) {
                                 $company_url = trim($element->nodeValue);
                                 $is_social_media = false;
@@ -481,15 +485,41 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                                         break;
                                     }
                                 }
-                                   // If it's not a social media link, assign the company URL
+
+                                // If it's not a social media link, assign the company URL and stop the loop
+                                if (!$is_social_media) {
+                                    $job_company_url = $company_url;
+                                    error_log("Company website fetched from HTML class '$class' (via <a> tag): $job_company_url");
+                                    break 2; // Exit both loops once a valid company URL is found
+                                } else {
+                                    error_log("Excluded social media URL from HTML class '$class' (via <a> tag): $company_url");
+                                }
+                            }
+
+                            // If no URL was found via <a> tags, check for @href directly
+                            if (empty($job_company_url)) {
+                                $company_url_elements = $job_xpath->query("//*[contains(@class, '$class')]/@href");
+                                foreach ($company_url_elements as $element) {
+                                    $company_url = trim($element->nodeValue);
+                                    $is_social_media = false;
+
+                                    // Validate the company URL to exclude social media links
+                                    foreach ($social_media_domains as $domain) {
+                                        if (strpos($company_url, $domain) !== false) {
+                                            $is_social_media = true;
+                                            break;
+                                        }
+                                    }
+
+                                    // If it's not a social media link, assign the company URL and stop the loop
                                     if (!$is_social_media) {
                                         $job_company_url = $company_url;
-                                        error_log("Company website fetched from HTML class: $job_company_url");
-                                        break 2; // Stop after finding the first valid company URL
+                                        error_log("Company website fetched from HTML class '$class' (direct @href): $job_company_url");
+                                        break 2; // Exit both loops once a valid company URL is found
                                     } else {
-                                        error_log("Excluded social media URL from HTML class: $company_url");
+                                        error_log("Excluded social media URL from HTML class '$class' (direct @href): $company_url");
                                     }
-                                
+                                }
                             }
                         }
 
@@ -504,14 +534,32 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         echo "Company URL: " . esc_url($job_company_url);
                     }
 
-     
+
 
 
                 
-                    // Fetch job types
-                    foreach ($job_type_classes as $class) {
-                        $job_type_elements = $job_xpath->query("//*[contains(@class, '$class')]");
-                        if ($job_type_elements && $job_type_elements->length > 0) {
+                            // Fetch job types using defined classes
+                            foreach ($job_type_classes as $class) {
+                                $job_type_elements = $job_xpath->query("//*[contains(@class, '$class')]");
+                                if ($job_type_elements && $job_type_elements->length > 0) {
+                                    foreach ($job_type_elements as $element) {
+                                        $fetched_job_type = trim($element->nodeValue);
+                                        $normalized_job_type = normalize_job_type($fetched_job_type);
+
+                                        // Check if the normalized job type is in the allowed job types list
+                                        if (in_array($normalized_job_type, $allowed_job_types)) {
+                                            $found_job_types[] = $normalized_job_type;
+                                            error_log("Job type found: $normalized_job_type using class: $class");
+                                        } 
+                                    }
+                                } else {
+                                    // Log if no elements were found with the current class
+                                    error_log("No job type found using class: $class");
+                                }
+                            }
+
+                            // Check adjacent tags for job type information
+                            $job_type_elements = $job_xpath->query("//span[contains(text(), 'Job Type')]/following-sibling::span");
                             foreach ($job_type_elements as $element) {
                                 $fetched_job_type = trim($element->nodeValue);
                                 $normalized_job_type = normalize_job_type($fetched_job_type);
@@ -519,283 +567,347 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                                 // Check if the normalized job type is in the allowed job types list
                                 if (in_array($normalized_job_type, $allowed_job_types)) {
                                     $found_job_types[] = $normalized_job_type;
-                                    error_log("Job type found: $normalized_job_type using class: $class");
-                                } 
+                                    error_log("Job type found in adjacent span: $normalized_job_type");
+                                    break; // Stop once a valid job type is found
+                                } else {
+                                    error_log("Fetched job type from adjacent span ($normalized_job_type) is not in allowed list.");
+                                }
                             }
-                        } else {
-                            // Log if no elements were found with the current class
-                            error_log("No job type found using class: $class");
-                        }
-                    }
 
-                    // Check adjacent tags for job type information
-                    $job_type_elements = $job_xpath->query("//span[contains(text(), 'Job Type')]/following-sibling::span");
-                    foreach ($job_type_elements as $element) {
-                        $fetched_job_type = trim($element->nodeValue);
-                        $normalized_job_type = normalize_job_type($fetched_job_type);
+                            // Determine the primary job type to use
+                            $job_type = !empty($found_job_types) ? $found_job_types[0] : 'Full Time'; // Default to 'Full Time' if none found
 
-                        // Check if the normalized job type is in the allowed job types list
-                        if (in_array($normalized_job_type, $allowed_job_types)) {
-                            $found_job_types[] = $normalized_job_type;
-                            error_log("Job type found in adjacent span: $normalized_job_type");
-                            break; // Stop once a valid job type is found
-                        } else {
-                            error_log("Fetched job type from adjacent span ($normalized_job_type) is not in allowed list.");
-                        }
-                    }
+                            error_log("Final job type: $job_type");
 
 
-                    // Determine the primary job type to use (e.g., first in the list)
-                    $job_type = !empty($found_job_types) ? $found_job_types[0] : '';
-                    
 
 
-                    // Fetch job description
-                    foreach ($job_description_classes as $class) {
-                        $job_description_elements = $job_xpath->query("//*[contains(@class, '$class')]");
-                        if ($job_description_elements && $job_description_elements->length > 0) {
-                            $job_description = '';
 
-                            // Check if the job listing URL is from remotive.com
-                            if (strpos($job_list_link, 'remotive.com') !== false) {
-                                // Remotive.com-specific logic
-                                foreach ($job_description_elements as $element) {
-                                    // Remove unwanted classes for remotive.com listings
-                                    $exclude_classes = [
-                                        'tw-hidden md:tw-pt-16 tw-p-6 md:tw-items-start md:tw-justify-between md:tw-flex-wrap md:tw-flex md:tw-content-left',
-                                        'remotive-text-smaller',
-                                        'tw-hidden md:tw-block remotive-text-smaller tw-p-4 tw-rounded-b-md tw-text-left remotive-bg-light-blue',
-                                        'remotive-text-smaller remotive-bg-light md:remotive-bg-white tw-mx-auto md:tw-mx-4 tw-mt-4 tw-mb-0 tw-rounded-md',
-                                        'remotive-bg-light tw-mt-2 tw-p-4 tw-rounded-md',
-                                        'h2 remotive-text-bigger',
-                                        'back',
-                                        'remotive-btn-orange',
-                                        'form',
-                                        'tw-mt-4',
-                                        'remotive-bg-light tw-mt-2 tw-p-4 tw-rounded-md'
-                                                
-                                    ];
+                            // Attempt to fetch the description using HTML classes
+                            foreach ($job_description_classes as $class) {
+                                $job_description_elements = $job_xpath->query("//*[contains(@class, '$class')]");
+                                if ($job_description_elements && $job_description_elements->length > 0) {
+                                    $job_description = '';
 
-                                    foreach ($exclude_classes as $exclude_class) {
-                                        $xpath_exclude_query = ".//*[contains(@class, '$exclude_class') or ancestor::*[contains(@class, '$exclude_class')]]";
-                                        $exclude_elements = $job_xpath->query($xpath_exclude_query, $element);
-                                        foreach ($exclude_elements as $exclude_element) {
-                                            $exclude_element->parentNode->removeChild($exclude_element);
+                                    // Check if the job listing URL is from remotive.com
+                                    if (strpos($job_list_link, 'remotive.com') !== false) {
+                                        // Remotive.com-specific logic
+                                        foreach ($job_description_elements as $element) {
+                                            // Remove unwanted classes for remotive.com listings
+                                            $exclude_classes = [
+                                                'tw-hidden md:tw-pt-16 tw-p-6 md:tw-items-start md:tw-justify-between md:tw-flex-wrap md:tw-flex md:tw-content-left',
+                                                'remotive-text-smaller',
+                                                'tw-hidden md:tw-block remotive-text-smaller tw-p-4 tw-rounded-b-md tw-text-left remotive-bg-light-blue',
+                                                'remotive-text-smaller remotive-bg-light md:remotive-bg-white tw-mx-auto md:tw-mx-4 tw-mt-4 tw-mb-0 tw-rounded-md',
+                                                'remotive-bg-light tw-mt-2 tw-p-4 tw-rounded-md',
+                                                'h2 remotive-text-bigger',
+                                                'back',
+                                                'remotive-btn-orange',
+                                                'form',
+                                                'tw-mt-4',
+                                                'remotive-bg-light tw-mt-2 tw-p-4 tw-rounded-md'
+                                            ];
+
+                                            foreach ($exclude_classes as $exclude_class) {
+                                                $xpath_exclude_query = ".//*[contains(@class, '$exclude_class') or ancestor::*[contains(@class, '$exclude_class')]]";
+                                                $exclude_elements = $job_xpath->query($xpath_exclude_query, $element);
+                                                foreach ($exclude_elements as $exclude_element) {
+                                                    $exclude_element->parentNode->removeChild($exclude_element);
+                                                }
+                                            }
+
+                                            // Fetch the inner HTML of each element
+                                            $inner_html = '';
+                                            foreach ($element->childNodes as $child) {
+                                                $inner_html .= $element->ownerDocument->saveHTML($child);
+                                            }
+
+                                            // Remove excessive newlines and breaks that cause formatting issues
+                                            $inner_html = preg_replace("/(<br\s*\/?>\s*){2,}/", "<br>", $inner_html); // Replace multiple <br> with single <br>
+                                            $inner_html = preg_replace("/\n\s*\n+/", "\n", $inner_html); // Replace multiple newlines with a single newline
+
+                                            $job_description .= $inner_html;
+                                        }
+
+                                        // Remove unwanted phrases from Remotive descriptions
+                                        $unwanted_phrases = [
+                                            '50% off',
+                                            'in September 2024',
+                                            'By joining now, I confirm that I have read and I accept',
+                                            'Remotive',
+                                            'Code of Conduct'
+                                        ];
+                                        foreach ($unwanted_phrases as $phrase) {
+                                            $job_description = preg_replace('/' . preg_quote($phrase, '/') . '\s*/i', '', $job_description);
+                                        }
+
+                                    } else {
+                                        // Original logic for other job links
+                                        foreach ($job_description_elements as $element) {
+                                            // Remove any child elements with the class 'job_application application'
+                                            $xpath_child_query = ".//*[contains(@class, 'job_application application')]";
+                                            $job_application_elements = $job_xpath->query($xpath_child_query, $element);
+
+                                            foreach ($job_application_elements as $application_element) {
+                                                $application_element->parentNode->removeChild($application_element);
+                                            }
+
+                                            // Fetch the inner HTML of each element
+                                            $inner_html = '';
+                                            foreach ($element->childNodes as $child) {
+                                                $inner_html .= $element->ownerDocument->saveHTML($child);
+                                            }
+
+                                            // Remove excessive newlines and breaks for better formatting
+                                            $inner_html = preg_replace("/(<br\s*\/?>\s*){2,}/", "<br>", $inner_html);
+                                            $inner_html = preg_replace("/\n\s*\n+/", "\n", $inner_html);
+
+                                            $job_description .= $inner_html;
                                         }
                                     }
 
-                                    // Fetch the inner HTML of each element
-                                    $inner_html = '';
-                                    foreach ($element->childNodes as $child) {
-                                        $inner_html .= $element->ownerDocument->saveHTML($child);
-                                    }
-                                    $job_description .= $inner_html;
-                                }
+                                    // Sanitize and allow safe HTML
+                                    $allowed_html = array(
+                                        'p' => array(),
+                                        'a' => array('href' => array(), 'title' => array()),
+                                        'b' => array(),
+                                        'i' => array(),
+                                        'ul' => array(),
+                                        'ol' => array(),
+                                        'li' => array(),
+                                        'strong' => array(),
+                                        'em' => array(),
+                                        'blockquote' => array(),
+                                        'br' => array(),
+                                        'hr' => array(),
+                                        'h1' => array(),
+                                        'h2' => array(),
+                                        'h3' => array(),
+                                        'h4' => array(),
+                                        'h5' => array(),
+                                        'h6' => array()
+                                    );
+                                    $job_description = wp_kses($job_description, $allowed_html);
 
-                                // Remove unwanted phrases from Remotive descriptions
-                                $unwanted_phrases = [
-                                    '50% off',
-                                    'in September 2024',
-                                    'By joining now, I confirm that I have read and I accept',
-                                     'Remotive',
-                                    'Code of Conduct'
-                                ];
-                                foreach ($unwanted_phrases as $phrase) {
-                                    $job_description = preg_replace('/' . preg_quote($phrase, '/') . '\s*/i', '', $job_description);
-                                }
+                                    // Correct encoding issues
+                                    $job_description = preg_replace('/\xC2\xA0/', ' ', $job_description); // Replace non-breaking space
+                                    $job_description = preg_replace('/Â/', '', $job_description); // Remove stray Â characters
+                                    $job_description = preg_replace('/[^\x00-\x7F]/', '', $job_description); // Remove non-ASCII characters
 
-                            } else {
-                                // Original logic for other job links
-                                foreach ($job_description_elements as $element) {
-                                    // Remove any child elements with the class 'job_application application'
-                                    $xpath_child_query = ".//*[contains(@class, 'job_application application')]";
-                                    $job_application_elements = $job_xpath->query($xpath_child_query, $element);
-
-                                    foreach ($job_application_elements as $application_element) {
-                                        $application_element->parentNode->removeChild($application_element);
-                                    }
-
-                                    // Fetch the inner HTML of each element
-                                    $inner_html = '';
-                                    foreach ($element->childNodes as $child) {
-                                        $inner_html .= $element->ownerDocument->saveHTML($child);
-                                    }
-                                    $job_description .= $inner_html;
+                                    error_log("Job description fetched and cleaned using class: $class");
+                                    break; // Stop checking classes once job description is found
                                 }
                             }
 
-                            // Sanitize and allow safe HTML
-                            $allowed_html = array(
-                                'p' => array(),
-                                'a' => array('href' => array(), 'title' => array()),
-                                'b' => array(),
-                                'i' => array(),
-                                'ul' => array(),
-                                'ol' => array(),
-                                'li' => array(),
-                                'strong' => array(),
-                                'em' => array(),
-                                'blockquote' => array(),
-                                'br' => array(),
-                                'hr' => array(),
-                                'h1' => array(),
-                                'h2' => array(),
-                                'h3' => array(),
-                                'h4' => array(),
-                                'h5' => array(),
-                                'h6' => array()
-                            );
-                            $job_description = wp_kses($job_description, $allowed_html);
 
-                            // Correct encoding issues
-                            $job_description = preg_replace('/\xC2\xA0/', ' ', $job_description); // Replace non-breaking space
-                            $job_description = preg_replace('/Â/', '', $job_description); // Remove stray Â characters
-                            $job_description = preg_replace('/[^\x00-\x7F]/', '', $job_description); // Remove non-ASCII characters
 
-                            error_log("Job description fetched and cleaned using class: $class");
-                            break; // Stop checking classes once job description is found
-                        } else {
-                            // Log if no elements were found with the current class
-                            error_log("No job description found using class: $class");
-                        }
-                    }
+                        
+
+
+                           
 
 
 
+                        // Define the base URL from the job URL
+                            $base_url = parse_url($job_url);
+                            $base_url = $base_url['scheme'] . '://' . $base_url['host']; // e.g., https://example.com
 
+                            // Placeholder URL
+                            $placeholder_logo_url = 'https://jobs.bgathuita.com/wp-content/uploads/sites/2/2024/09/logo-placeholder-image.png';
 
+                            // Fetch company logo URL
+                            foreach ($job_company_logo_classes as $class) {
+                                $job_company_logo_elements = $job_xpath->query("//img[contains(@class, '$class')]");
 
+                                if ($job_company_logo_elements && $job_company_logo_elements->length > 0) {
+                                    foreach ($job_company_logo_elements as $element) {
+                                        $src = $element->getAttribute('src');
+                                        $data_src = $element->getAttribute('data-src');
+                                        $data_lazyload = $element->getAttribute('data-lazyload');
 
+                                        // Log details about the image found
+                                        error_log('Remote Job Aggregator: Checking node with class: ' . $class);
+                                        error_log('Remote Job Aggregator: Found src: ' . $src);
+                                        error_log('Remote Job Aggregator: Found data-src: ' . $data_src);
+                                        error_log('Remote Job Aggregator: Found data-lazyload: ' . $data_lazyload);
 
+                                        // Check src attribute
+                                        if (!empty($src) && strpos($src, 'data:image/gif') === false && strpos($src, 'data:') === false) {
+                                            $job_company_logo_url = urldecode($src);
+                                            if (parse_url($job_company_logo_url, PHP_URL_SCHEME) === null) {
+                                                // URL is relative, prepend the base URL
+                                                $job_company_logo_url = $base_url . $job_company_logo_url;
+                                            }
+                                            break 2; // Exit both foreach loops as we found a valid image
+                                        }
 
-                   // Define the base URL from the job URL
-                    $base_url = parse_url($job_url);
-                    $base_url = $base_url['scheme'] . '://' . $base_url['host']; // e.g., https://example.com
+                                        // Check data-src attribute if src is not valid
+                                        if (!empty($data_src) && strpos($data_src, 'data:image/gif') === false && strpos($data_src, 'data:') === false) {
+                                            $job_company_logo_url = urldecode($data_src);
+                                            if (parse_url($job_company_logo_url, PHP_URL_SCHEME) === null) {
+                                                // URL is relative, prepend the base URL
+                                                $job_company_logo_url = $base_url . $job_company_logo_url;
+                                            }
+                                            break 2; // Exit both foreach loops as we found a valid image
+                                        }
 
-                    // Placeholder URL
-                    $placeholder_logo_url = 'https://jobs.bgathuita.com/wp-content/uploads/sites/2/2024/09/logo-placeholder-image.png';
-
-                    // Fetch company logo URL
-                    foreach ($job_company_logo_classes as $class) {
-                        $job_company_logo_elements = $job_xpath->query("//img[contains(@class, '$class')]");
-
-                        if ($job_company_logo_elements && $job_company_logo_elements->length > 0) {
-                            foreach ($job_company_logo_elements as $element) {
-                                $src = $element->getAttribute('src');
-                                $data_src = $element->getAttribute('data-src');
-                                $data_lazyload = $element->getAttribute('data-lazyload');
-
-                                // Log details about the image found
-                                error_log('Remote Job Aggregator: Checking node with class: ' . $class);
-                                error_log('Remote Job Aggregator: Found src: ' . $src);
-                                error_log('Remote Job Aggregator: Found data-src: ' . $data_src);
-                                error_log('Remote Job Aggregator: Found data-lazyload: ' . $data_lazyload);
-
-                                // Check src attribute
-                                if (!empty($src) && strpos($src, 'data:image/gif') === false && strpos($src, 'data:') === false) {
-                                    $job_company_logo_url = urldecode($src);
-                                    if (parse_url($job_company_logo_url, PHP_URL_SCHEME) === null) {
-                                        // URL is relative, prepend the base URL
-                                        $job_company_logo_url = $base_url . $job_company_logo_url;
+                                        // Check data-lazyload attribute if src and data-src are not valid
+                                        if (!empty($data_lazyload) && strpos($data_lazyload, 'data:image/gif') === false && strpos($data_lazyload, 'data:') === false) {
+                                            $job_company_logo_url = urldecode($data_lazyload);
+                                            if (parse_url($job_company_logo_url, PHP_URL_SCHEME) === null) {
+                                                // URL is relative, prepend the base URL
+                                                $job_company_logo_url = $base_url . $job_company_logo_url;
+                                            }
+                                            break 2; // Exit both foreach loops as we found a valid image
+                                        }
                                     }
-                                    break 2; // Exit both foreach loops as we found a valid image
-                                }
 
-                                // Check data-src attribute if src is not valid
-                                if (!empty($data_src) && strpos($data_src, 'data:image/gif') === false && strpos($data_src, 'data:') === false) {
-                                    $job_company_logo_url = urldecode($data_src);
-                                    if (parse_url($job_company_logo_url, PHP_URL_SCHEME) === null) {
-                                        // URL is relative, prepend the base URL
-                                        $job_company_logo_url = $base_url . $job_company_logo_url;
+                                    // If no valid logo URL is found, use the placeholder URL
+                                    if (empty($job_company_logo_url)) {
+                                        $job_company_logo_url = $placeholder_logo_url;
                                     }
-                                    break 2; // Exit both foreach loops as we found a valid image
-                                }
 
-                                // Check data-lazyload attribute if src and data-src are not valid
-                                if (!empty($data_lazyload) && strpos($data_lazyload, 'data:image/gif') === false && strpos($data_lazyload, 'data:') === false) {
-                                    $job_company_logo_url = urldecode($data_lazyload);
-                                    if (parse_url($job_company_logo_url, PHP_URL_SCHEME) === null) {
-                                        // URL is relative, prepend the base URL
-                                        $job_company_logo_url = $base_url . $job_company_logo_url;
-                                    }
-                                    break 2; // Exit both foreach loops as we found a valid image
+                                    // Convert to absolute URL if necessary
+                                    $job_company_logo_url = adjust_job_link($job_url, $job_company_logo_url);
+
+                                    // Log the fetched company logo URL and class used
+                                    error_log("Fetched company logo URL: $job_company_logo_url using class: $class");
+
+                                    break; // Stop checking classes once company logo is found and uploaded
+                                } else {
+                                    // Log if no elements were found with the current class
+                                    error_log("No company logo found using class: $class");
                                 }
                             }
 
-                            // If no valid logo URL is found, use the placeholder URL
-                            if (empty($job_company_logo_url)) {
-                                $job_company_logo_url = $placeholder_logo_url;
-                            }
 
-                            // Convert to absolute URL if necessary
-                            $job_company_logo_url = adjust_job_link($job_url, $job_company_logo_url);
-
-                            // Log the fetched company logo URL and class used
-                            error_log("Fetched company logo URL: $job_company_logo_url using class: $class");
-
-                            break; // Stop checking classes once company logo is found and uploaded
-                        } else {
-                            // Log if no elements were found with the current class
-                            error_log("No company logo found using class: $class");
-                        }
-                    }
-
-
-                   // Fetch job application URL
-                    foreach ($job_application_url_classes as $class) {
-                        $job_application_url_elements = $job_xpath->query("//*[contains(@class, '$class')]/@href");
-                        if ($job_application_url_elements && $job_application_url_elements->length > 0) {
-                            $job_application_url = $job_application_url_elements->item(0)->nodeValue;
-
-                            // Check if the URL contains email protection pattern
-                            if (strpos($job_application_url, '/cdn-cgi/l/email-protection') !== false) {
-                                // Log detection of email protection
-                                error_log("Email protection detected in URL: $job_application_url");
+                        // Fetch job application URL
+                            foreach ($job_application_url_classes as $class) {
+                                // First, try to find the URL in elements with the specified class
+                                $job_application_url_elements = $job_xpath->query("//*[contains(@class, '$class')]/@href");
                                 
-                                // Use the job link as the application URL instead
-                                $job_application_url = $job_url;
-                            } else {
-                                // Convert to absolute URL if necessary
-                                $job_application_url = adjust_job_link($job_url, $job_application_url);
+                                if ($job_application_url_elements && $job_application_url_elements->length > 0) {
+                                    $job_application_url = $job_application_url_elements->item(0)->nodeValue;
+
+                                     // Check if the URL contains email protection pattern or is an email
+                                    if (strpos($job_application_url, '/cdn-cgi/l/email-protection') !== false || filter_var($job_application_url, FILTER_VALIDATE_EMAIL)) {
+                                        // Log detection of email or email protection
+                                        error_log("Skipping Job since an Email or email protection was detected in URL: $job_application_url");
+                                        
+                                        // Skip the entire job if it contains or is an email
+                                        continue 2; // Skip the current job and move to the next one
+                                    } else {
+                                        // Convert to absolute URL if necessary
+                                        $job_application_url = adjust_job_link($job_url, $job_application_url);
+                                    }
+
+                                    // Fetch all links from settings (default and custom)
+                                    $all_job_list_links = array_merge(
+                                        array_column($default_link_settings, 'job_list_link'),
+                                        array_column($custom_link_settings, 'job_list_link')
+                                    );
+
+                                    // Extract the domain of the job application URL
+                                    $job_application_url_domain = parse_url($job_application_url, PHP_URL_HOST);
+
+                                    // If the job application URL matches any of the domains in settings, skip the job
+                                    foreach ($all_job_list_links as $job_list_link) {
+                                        $job_list_link_domain = parse_url($job_list_link, PHP_URL_HOST);
+                                        if ($job_application_url_domain === $job_list_link_domain) {
+                                            error_log("Job application URL matches a main link domain. Skipping job: $job_application_url");
+                                            continue 2; // Skip this job
+                                        }
+                                    }
+
+                                    // Validate the URL and ensure it's not a 404 or invalid
+                                    if (!filter_var($job_application_url, FILTER_VALIDATE_URL) || !is_url_valid($job_application_url)) {
+                                        error_log("Invalid job application URL: $job_application_url. Skipping job.");
+                                        continue; // Skip invalid URLs
+                                    }
+
+                                    // Log the fetched application URL and class used
+                                    error_log("Fetched application URL: $job_application_url using class: $class");
+                                    break; // Stop checking classes once job application URL is found
+                                } else {
+                                    // If no URL is found in elements with the specified class, try to find it in parent <a> tags
+                                    $job_application_button_elements = $job_xpath->query("//*[contains(@class, '$class')]//ancestor::a/@href");
+                                    if ($job_application_button_elements && $job_application_button_elements->length > 0) {
+                                        $job_application_url = $job_application_button_elements->item(0)->nodeValue;
+
+                                        // Check if the URL contains email protection pattern
+                                        if (strpos($job_application_url, '/cdn-cgi/l/email-protection') !== false) {
+                                            // Log detection of email protection
+                                            error_log("Email protection detected in URL: $job_application_url");
+                                            
+                                            // Use the job link as the application URL instead
+                                            $job_application_url = $job_url;
+                                        } else {
+                                            // Convert to absolute URL if necessary
+                                            $job_application_url = adjust_job_link($job_url, $job_application_url);
+                                        }
+
+                                        // Fetch all links from settings (default and custom)
+                                        $all_job_list_links = array_merge(
+                                            array_column($default_link_settings, 'job_list_link'),
+                                            array_column($custom_link_settings, 'job_list_link')
+                                        );
+
+
+                                        // Extract the domain of the job application URL
+                                        $job_application_url_domain = parse_url($job_application_url, PHP_URL_HOST);
+
+                                        // If the job application URL matches any of the domains in settings, skip the job
+                                        foreach ($all_job_list_links as $job_list_link) {
+                                            $job_list_link_domain = parse_url($job_list_link, PHP_URL_HOST);
+                                            if ($job_application_url_domain === $job_list_link_domain) {
+                                                error_log("Job application URL matches a main link domain. Skipping job: $job_application_url");
+                                                continue 2; // Skip this job
+                                            }
+                                        }
+
+                                        // Validate the URL and ensure it's not a 404 or invalid
+                                        if (!filter_var($job_application_url, FILTER_VALIDATE_URL) || !is_url_valid($job_application_url)) {
+                                            error_log("Invalid job application URL: $job_application_url. Skipping job.");
+                                            continue; // Skip invalid URLs
+                                        }
+
+                                        // Log the fetched application URL and class used
+                                        error_log("Fetched application URL: $job_application_url using class: $class");
+                                        break; // Stop checking classes once job application URL is found
+                                    } else {
+                                        // Log if no elements were found with the current class
+                                        error_log("No application URL found using class: $class");
+                                    }
+                                }
                             }
-                            
-                            // Log the fetched application URL and class used
-                            error_log("Fetched application URL: $job_application_url using class: $class");
-                            break; // Stop checking classes once job application URL is found
-                        } else {
-                            // Log if no elements were found with the current class
-                            error_log("No application URL found using class: $class");
-                        }
-                    }
+
+                            // Check if job exists in WP Job Manager
+                            $existing_job = rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url);
+
+                            if ($existing_job) {
+                                // Job exists in WP Job Manager, skip fetching
+                                error_log("Skipping existing job: $job_title");
+                                $link_indexes[$index]++;
+                                continue;
+                            }
+
+                            // Log errors if job details are not found
+                            if (empty($job_title) || empty($job_description)) {
+                                error_log("Missing job details for job link: $job_url. 
+                                    Job Title Classes: " . json_encode($job_title_classes) . ", 
+                                    Job Company Name Classes: " . json_encode($job_company_name_classes) . ", 
+                                    Job Description Classes: " . json_encode($job_description_classes) . ", 
+                                    Job Application URL Classes: " . json_encode($job_application_url_classes));
+                                $link_indexes[$index]++;
+                                continue; // Skip to next job URL
+                            }
 
 
-                    // Check if job exists in WP Job Manager
-                    $existing_job = rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url);
+                            // Determine job category based on the job title
+                            $job_category = determine_job_category($job_title, $categories_keywords);
 
-                    if ($existing_job) {
-                        // Job exists in WP Job Manager, skip fetching
-                        error_log("Skipping existing job: $job_title");
-                        $link_indexes[$index]++;
-                        continue;
-                    }
-
-                    // Log errors if job details are not found
-                    if (empty($job_title) || empty($job_description)) {
-                        error_log("Missing job details for job link: $job_url. 
-                            Job Title Classes: " . json_encode($job_title_classes) . ", 
-                            Job Company Name Classes: " . json_encode($job_company_name_classes) . ", 
-                            Job Description Classes: " . json_encode($job_description_classes) . ", 
-                            Job Application URL Classes: " . json_encode($job_application_url_classes));
-                        $link_indexes[$index]++;
-                        continue; // Skip to next job URL
-                    }
-
-
-                    // Determine job category based on the job title
-                    $job_category = determine_job_category($job_title, $categories_keywords);
-
-                    // Ensure the job category exists
-                    ensure_category_exists($job_category);
+                            // Ensure the job category exists
+                            ensure_category_exists($job_category);
 
 
                     // Insert job post
@@ -905,24 +1017,29 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
 function adjust_job_link($job_list_link, $job_link) {
     // Check if the job link is an absolute URL
     if (strpos($job_link, 'http') === false) {
-        // Extract scheme and host from job_list_link to construct the base URL
+        // Extract the base URL (scheme and host) from the job_list_link
         $parsed_url = parse_url($job_list_link);
         $base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
 
         // Check if the job link is a relative path and prepend the base URL
         if (strpos($job_link, '/') === 0) {
-            $job_link = rtrim($job_list_link, '/') . '/' . ltrim($job_link, '/');
+            // Case where the job link is a relative path (starts with '/')
+            $job_link = rtrim($base_url, '/') . $job_link;
         } else {
-            // If the job link is not a relative path, prepend base URL
-            $job_link = $base_url . '/' . ltrim($job_link, '/');
+            // Case where the job link is a relative URL, but missing the starting '/'
+            // Simply append the relative job link to the base URL
+            $job_link = rtrim($base_url, '/') . '/' . ltrim($job_link, '/');
         }
-    } else {
-        // If job_link is already an absolute URL, use it as-is
-        $job_link = $job_link;
     }
+
+    // Remove any duplicate slashes, especially after the base URL
+    $job_link = preg_replace('#(?<!:)//+#', '/', $job_link);
 
     return $job_link;
 }
+
+
+
 
 
 
@@ -955,5 +1072,28 @@ function rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url = '
     } else {
         return null; // Return null if the job does not exist
     }
+}
+
+
+function is_url_valid($url) {
+    // Initialize cURL session
+    $ch = curl_init($url);
+    
+    // Set cURL options to make a HEAD request
+    curl_setopt($ch, CURLOPT_NOBODY, true); // Don't download the body
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Return the response
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // Timeout after 10 seconds
+    
+    // Execute the cURL request
+    curl_exec($ch);
+    
+    // Get the HTTP status code
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    
+    // Close the cURL session
+    curl_close($ch);
+    
+    // Check if the response code is in the 200-399 range (successful responses)
+    return ($http_code >= 200 && $http_code < 400);
 }
 

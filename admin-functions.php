@@ -762,8 +762,8 @@ function rjobs_normal_links_settings_page() {
         echo '            <textarea name="rjobs_job_title_field" id="rjobs_job_title_field" required></textarea>';
         echo '            <label for="rjobs_job_company_name_field">Job Company Name Field</label>';
         echo '            <textarea name="rjobs_job_company_name_field" id="rjobs_job_company_name_field" ></textarea>';
-        echo '            <label for="rjobs_job_type_field">Job Type Field<span>*</span></label>';
-        echo '            <textarea name="rjobs_job_type_field" id="rjobs_job_type_field" required></textarea>';
+        echo '            <label for="rjobs_job_type_field">Job Type Field</label>';
+        echo '            <textarea name="rjobs_job_type_field" id="rjobs_job_type_field" ></textarea>';
         echo '            <label for="rjobs_job_description_field">Job Description Field<span>*</span></label>';
         echo '            <textarea name="rjobs_job_description_field" id="rjobs_job_description_field" required></textarea>';
         echo '            <label for="rjobs_job_company_logo_field">Job Company Logo Field<span>*</span></label>';
