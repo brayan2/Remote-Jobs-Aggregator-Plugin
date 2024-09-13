@@ -153,24 +153,6 @@ function rjobs_main_settings_page() {
     echo '</tr>';
 
 
-
-    // Clear Fetched Jobs
-    echo '<tr>';
-    echo '<th scope="row">';
-    echo '<label for="rjobs_clear_fetched_jobs" class="rjobs-label">Clear Job Data & Cache</label>';
-    echo '</th>';
-    echo '<td>';
-    echo '<input type="checkbox" id="rjobs_clear_fetched_jobs" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox"> ';
-    echo '<p class="checkbox-title">Clear all fetched jobs data and cache.</p>';
-    echo '<p class="checkbox-description">If checked, all the fetched jobs data and cache will be cleared from the database.</p>';
-
-    // Warning Note
-    echo '<p id="warning-note" class="warning-note" style=" display: none;">Warning: This action is irreversible. All job data, cache, and transients will be permanently deleted. Proceed with caution!</p>';
-
-    echo '</td>';
-    echo '</tr>';
-
-
     
 
     // Manual Job Approval Checkbox
@@ -200,6 +182,23 @@ function rjobs_main_settings_page() {
     echo '<p class="checkbox-description">Select the default post status for fetched jobs if manual approval is enabled.</p>';
     echo '</td>';
     echo '</tr>';
+
+    // Clear Fetched Jobs
+    echo '<tr>';
+    echo '<th scope="row">';
+    echo '<label for="rjobs_clear_fetched_jobs" class="rjobs-label">Clear Job Data & Cache</label>';
+    echo '</th>';
+    echo '<td>';
+    echo '<input type="checkbox" id="rjobs_clear_fetched_jobs" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox"> ';
+    echo '<p class="checkbox-title">Clear all fetched jobs data and cache.</p>';
+    echo '<p class="checkbox-description">If checked, all the fetched jobs data and cache will be cleared from the database.</p>';
+
+    // Warning Note
+    echo '<p id="warning-note" class="warning-note" style=" display: none;">Warning: This action is irreversible. All job data, cache, and transients will be permanently deleted. Proceed with caution!</p>';
+
+    echo '</td>';
+    echo '</tr>';
+    
 
     echo '</table>';
     echo '<p class="submit"><input type="submit" name="rjobs_save_main_settings" id="submit" class="button button-primary" value="Save Settings"></p>';
