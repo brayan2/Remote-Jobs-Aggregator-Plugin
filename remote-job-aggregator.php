@@ -3,7 +3,7 @@
 Plugin Name: Remote Job Aggregator
 Plugin URI: https://jobs.bgathuita.com
 Description: Fetches remote jobs from various RSS feeds and custom links, and displays them on your WordPress site.
-Version: 1.0.2
+Version: 1.0.3
 Author: Brian Gathuita
 Author URI: https://jobs.bgathuita.com
 RequiresWP: 5.8

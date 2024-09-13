@@ -133,11 +133,13 @@ function rjobs_fetch_jobs() {
                         }
                         $job_type = $feed_job_type ? $feed_job_type : 'Full Time';
 
+                        $post_status = get_option('rjobs_post_status', 'publish'); // Default to 'publish' if no status is selected
+
                         // Insert job post first
                         $job_data = array(
                             'post_title' => sanitize_text_field($item->get_title()),
                             'post_content' => wp_kses_post($item->get_content()),
-                            'post_status' => 'publish',
+                            'post_status'   => $post_status, 
                             'post_type' => 'job_listing',
                             'comment_status' => 'closed',
                             'ping_status' => 'closed',

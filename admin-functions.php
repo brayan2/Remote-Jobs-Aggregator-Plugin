@@ -29,7 +29,8 @@ function rjobs_admin_menu() {
         'manage_options',      // Capability
         'rjobs-settings',      // Menu slug (this will be the slug for the settings page)
         'rjobs_settings_page', // Function to display the settings page
-        'dashicons-admin-site' // Icon for the menu
+        'dashicons-admin-site', // Icon for the menu
+        30
     );
 
     // Remove the main admin page by not adding it
@@ -61,38 +62,73 @@ function rjobs_display_admin_notices()
 }
 add_action('admin_notices', 'rjobs_display_admin_notices');
 
+
 function rjobs_main_settings_page() {
+    // Handle form submission
     if (isset($_POST['rjobs_save_main_settings']) && check_admin_referer('rjobs_save_main_settings', 'rjobs_main_settings_nonce')) {
         $num_jobs = absint($_POST['rjobs_num_jobs']);
         $schedule_frequency = sanitize_text_field($_POST['rjobs_schedule_frequency']);
-        $fetch_source = sanitize_text_field($_POST['rjobs_fetch_source']); // New field for fetch source
+        $fetch_source = sanitize_text_field($_POST['rjobs_fetch_source']);
+        $manual_approval = isset($_POST['rjobs_manual_approval']) ? 1 : 0;
 
+        $clear_fetched_jobs = isset($_POST['rjobs_clear_fetched_jobs']); // Check if checkbox is checked
+
+        // Post status management based on manual approval
+        $post_status = 'publish'; // Default to 'publish' if manual approval is not enabled
+        if ($manual_approval && isset($_POST['rjobs_post_status'])) {
+            $post_status = sanitize_text_field($_POST['rjobs_post_status']); // Get the selected post status
+        }
+ 
+        // Update options
         update_option('rjobs_num_jobs', $num_jobs);
         update_option('rjobs_schedule_frequency', $schedule_frequency);
-        update_option('rjobs_fetch_source', $fetch_source); // Save fetch source option
+        update_option('rjobs_fetch_source', $fetch_source);
+        update_option('rjobs_manual_approval', $manual_approval);
+        update_option('rjobs_post_status', $post_status);
 
-        // Schedule or reschedule cron job based on new settings
-        rjobs_schedule_cron(); 
+        // Schedule or reschedule cron job
+        rjobs_schedule_cron();
+
+        // Clear fetched jobs and cache if checkbox is checked
+        if ($clear_fetched_jobs) {
+            rjobs_clear_all_jobs();
+            echo '<div class="notice notice-success is-dismissible"><p>All fetched jobs and cached data have been cleared!</p></div>';
+        }
 
         echo '<div class="notice notice-success is-dismissible"><p>Settings saved successfully!</p></div>';
     }
 
+    // Get current options
     $num_jobs = get_option('rjobs_num_jobs', 10);
     $schedule_frequency = get_option('rjobs_schedule_frequency', 'daily');
-    $fetch_source = get_option('rjobs_fetch_source', 'rss'); // Default to 'rss'
+    $fetch_source = get_option('rjobs_fetch_source', 'rss');
+    $manual_approval = get_option('rjobs_manual_approval', 0);
+    $post_status = get_option('rjobs_post_status', 'publish');
 
+    // Render settings form
     echo '<form method="post" action="">';
     wp_nonce_field('rjobs_save_main_settings', 'rjobs_main_settings_nonce');
+
     echo '<h2>Main Settings</h2>';
     echo '<table class="form-table">';
+
+    // Number of Jobs to Fetch
     echo '<tr>';
-    echo '<th scope="row"><label for="rjobs_num_jobs">Number of Jobs to Fetch</label></th>';
-    echo '<td><input type="number" name="rjobs_num_jobs" value="' . esc_attr($num_jobs) . '" class="small-text" min="1"></td>';
+    echo '<th scope="row">';
+    echo '<label for="rjobs_num_jobs">Number of Jobs to Fetch</label>';
+    echo '<span class="dashicons dashicons-editor-help" title="This is the number of job listings fetched from the source each time the fetch runs."></span>';
+    echo '</th>';
+    echo '<td><input type="number" name="rjobs_num_jobs" value="' . esc_attr($num_jobs) . '" class="rjobs-field-width" min="1"></td>';
     echo '</tr>';
+
+    // Fetch Frequency
     echo '<tr>';
-    echo '<th scope="row"><label for="rjobs_schedule_frequency">Fetch Frequency</label></th>';
+    echo '<th scope="row">';
+    echo '<label for="rjobs_schedule_frequency">Fetch Frequency</label>';
+    echo '<span class="dashicons dashicons-editor-help" title="This determines how often the job fetching process runs."></span>';
+    echo '</th>';
     echo '<td>';
-    echo '<select name="rjobs_schedule_frequency">';
+    echo '<select name="rjobs_schedule_frequency" class="rjobs-field-width">';
     echo '<option value="minutely"' . selected($schedule_frequency, 'minutely', false) . '>Every 1 Minute</option>';
     echo '<option value="half_hourly"' . selected($schedule_frequency, 'half_hourly', false) . '>Every 30 Minutes</option>';
     echo '<option value="hourly"' . selected($schedule_frequency, 'hourly', false) . '>Every 1 Hour</option>';
@@ -101,19 +137,143 @@ function rjobs_main_settings_page() {
     echo '</select>';
     echo '</td>';
     echo '</tr>';
+
+    // Fetch Source
     echo '<tr>';
-    echo '<th scope="row"><label for="rjobs_fetch_source">Fetch Source</label></th>';
+    echo '<th scope="row">';
+    echo '<label for="rjobs_fetch_source">Fetch Source</label>';
+    echo '<span class="dashicons dashicons-editor-help" title="Select the source type from which jobs will be fetched, e.g., RSS feeds or regular links."></span>';
+    echo '</th>';
     echo '<td>';
-    echo '<select name="rjobs_fetch_source">';
+    echo '<select name="rjobs_fetch_source" class="rjobs-field-width">';
     echo '<option value="rss"' . selected($fetch_source, 'rss', false) . '>RSS Feeds</option>';
     echo '<option value="normal_links"' . selected($fetch_source, 'normal_links', false) . '>Normal Links</option>';
     echo '</select>';
     echo '</td>';
     echo '</tr>';
+
+    // Clear Fetched Jobs
+    echo '<tr>';
+    echo '<th scope="row">';
+    echo '<label for="rjobs_clear_fetched_jobs" class="rjobs-label">Clear Job Data & Cache</label>';
+    echo '</th>';
+    echo '<td><input type="checkbox" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox" ' . checked($clear_fetched_jobs, 1, false) . '> ';
+    echo '<p class="checkbox-title">Clear all fetched jobs data and cache.</p>';
+    echo '<p class="checkbox-description">If checked, all the fetched jobs data and cache will be cleared from the database.</p>';
+    echo '</td>';
+    echo '</tr>';
+
+    // Manual Job Approval Checkbox
+    echo '<tr>';
+    echo '<th scope="row">';
+    echo '<label for="rjobs_manual_approval" class="rjobs-label">Manual Job Approval</label>';
+    echo '</th>';
+    echo '<td>';
+    echo '<input type="checkbox" id="rjobs_manual_approval" name="rjobs_manual_approval" value="1" class="rjobs-checkbox" ' . checked($manual_approval, 1, false) . '> ';
+    echo '<p class="checkbox-title">Enable manual job approval.</p>';
+    echo '<p class="checkbox-description">If enabled, you can select the post status for the fetched jobs. Otherwise, jobs will be published by default.</p>';
+    echo '</td>';
+    echo '</tr>';
+
+    // Post Status for Fetched Jobs (Visible only when manual approval is checked)
+    echo '<tr id="post-status-section" style="display: ' . ($manual_approval ? 'table-row' : 'none') . ';">';
+    echo '<th scope="row">';
+    echo '<label class="rjobs-label">Post Status</label>';
+    echo '</th>';
+    echo '<td>';
+    echo '<input type="radio" name="rjobs_post_status" value="publish" class="rjobs-radio" ' . checked($post_status, 'publish', false) . '> ';
+    echo '<label for="rjobs_post_status_published">Published</label><br>';
+    echo '<input type="radio" name="rjobs_post_status" value="draft" class="rjobs-radio" ' . checked($post_status, 'draft', false) . '> ';
+    echo '<label for="rjobs_post_status_draft">Draft</label><br>';
+    echo '<input type="radio" name="rjobs_post_status" value="pending" class="rjobs-radio" ' . checked($post_status, 'pending', false) . '> ';
+    echo '<label for="rjobs_post_status_pending">Pending</label><br>';
+    echo '<p class="checkbox-description">Select the default post status for fetched jobs if manual approval is enabled.</p>';
+    echo '</td>';
+    echo '</tr>';
+
     echo '</table>';
     echo '<p class="submit"><input type="submit" name="rjobs_save_main_settings" id="submit" class="button button-primary" value="Save Settings"></p>';
     echo '</form>';
+
+    // JavaScript for toggling post status section based on manual approval checkbox
+    echo '<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const manualApprovalCheckbox = document.getElementById("rjobs_manual_approval");
+        const postStatusSection = document.getElementById("post-status-section");
+
+        // Function to toggle post status section visibility
+        function togglePostStatus() {
+            postStatusSection.style.display = manualApprovalCheckbox.checked ? "table-row" : "none";
+        }
+
+        // Initial toggle on page load
+        togglePostStatus();
+
+        // Event listener for manual approval checkbox
+        manualApprovalCheckbox.addEventListener("change", togglePostStatus);
+    });
+    </script>';
 }
+
+
+function rjobs_insert_job($job_data) {
+    // Retrieve the post status option
+    $post_status = get_option('rjobs_post_status', 'publish'); // Default to 'publish' if no status is selected
+
+    // Prepare job data for insertion
+    $job_args = array(
+        'post_title'    => sanitize_text_field($job_data['title']),
+        'post_content'  => sanitize_textarea_field($job_data['description']), // Use sanitize_textarea_field for multi-line content
+        'post_type'     => 'job_listing', // Replace with your custom post type
+        'post_status'   => $post_status,
+        'meta_input'    => array(
+            '_job_location' => sanitize_text_field($job_data['location']),
+            '_job_type'     => sanitize_text_field($job_data['type']),
+            // Additional metadata fields...
+        ),
+    );
+
+    // Insert the job post
+    $post_id = wp_insert_post($job_args);
+
+    // Check for errors
+    if (is_wp_error($post_id)) {
+        // Log the error or handle it as needed
+        error_log('Error inserting job post: ' . $post_id->get_error_message());
+        return false; // or return an error code/message if necessary
+    }
+
+    return $post_id;
+}
+
+
+
+function rjobs_clear_all_jobs() {
+    $args = array(
+        'post_type' => 'job_listing', // Replace with your actual post type
+        'posts_per_page' => -1,
+        'post_status' => 'any',
+    );
+
+    $jobs = get_posts($args);
+
+    // Delete each fetched job
+    foreach ($jobs as $job) {
+        wp_delete_post($job->ID, true); // Force delete each job post
+    }
+
+    // Clear any transients or cached data related to jobs
+    global $wpdb;
+    $wpdb->query("DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_rjobs_%'");
+    $wpdb->query("DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_timeout_rjobs_%'");
+
+    // Optionally clear any specific cache
+    if (function_exists('wp_cache_flush')) {
+        wp_cache_flush(); // Flushes all object caches
+    }
+}
+
+
 
 function rjobs_normal_links_settings_page() {
     if (!current_user_can('manage_options')) {
@@ -295,7 +455,7 @@ function rjobs_normal_links_settings_page() {
     }
 
     
-    
+
 
     echo '<style>
         
@@ -530,6 +690,11 @@ function rjobs_normal_links_settings_page() {
                 margin-right: 10px;
             }
 
+            p{
+              color: #3c434a;
+              font-size: 13px !important;
+            }
+
 
 
             /* Ensure the checkbox column is not separated and aligns well */
@@ -593,6 +758,46 @@ function rjobs_normal_links_settings_page() {
             .link-status-disabled { 
                 color: red; 
             }
+
+
+            #rjobs-import-progress-bar {
+                width: 100%;
+                max-width: 200px; /* Adjust the maximum width as needed */
+                margin: 20px 0;
+                position: relative;
+            }
+
+            #rjobs-import-progress-bar progress {
+                width: 100%;
+                height: 10px; /* Reduced height */
+                appearance: none;
+            }
+
+            #rjobs-import-progress-bar progress::-webkit-progress-bar {
+                background-color: rgba(0, 0, 0, 0.1); /* Light background */
+            }
+
+            #rjobs-import-progress-bar progress::-webkit-progress-value {
+                background-color: rgba(255, 165, 0, 0.5); /* Orange with transparency */
+            }
+
+            #rjobs-import-progress-bar.success progress::-webkit-progress-value {
+                background-color: rgba(0, 128, 0, 0.5); /* Green with transparency */
+            }
+
+            #rjobs-import-progress-bar.failure progress::-webkit-progress-value {
+                background-color: rgba(255, 0, 0, 0.5); /* Red with transparency */
+            }
+
+            #rjobs-import-progress-bar span {
+                display: block;
+                margin-top: 5px;
+                font-size: 12px; /* Adjust font size as needed */
+                font-weight: bold;
+            }
+
+
+
         </style>';
 
 
@@ -603,40 +808,51 @@ function rjobs_normal_links_settings_page() {
 
 
     // Display default links with checkboxes
-        echo '<form method="post" action="' . esc_url(admin_url('admin.php?page=rjobs-settings&tab=normal')) . '">';
-        wp_nonce_field('rjobs_save_default_links_settings', 'rjobs_default_links_settings_nonce');
-        echo '<h2>Normal Links Settings</h2>';
-        echo '<table class="form-table">';
-        echo '<tr>';
-        echo '<div class="default-links-container">';
-        echo '<th scope="row"><label for="rjobs_default_links">Default Links</label></th>';
-        echo '<td>';
-        echo '<div class="default-links-list">';
+    echo '<form method="post" action="' . esc_url(admin_url('admin.php?page=rjobs-settings&tab=normal')) . '">';
+    wp_nonce_field('rjobs_save_default_links_settings', 'rjobs_default_links_settings_nonce');
 
-        if (!empty($default_links)) {
-            foreach ($default_links as $index => $link_settings) {
-                $checked = isset($default_links_settings[$index]['enabled']) && $default_links_settings[$index]['enabled'] ? 'checked' : '';
-                $status = $checked ? '<span class="link-status-enabled">Enabled</span>' : '<span class="link-status-disabled">Disabled</span>';
-                echo '<div class="default-link-item">';
-                echo '<label><input type="checkbox" name="default_links[]" value="' . esc_attr($index) . '" ' . $checked . '> ' . esc_html($link_settings['name']) . ' - ' . $status . '</label>';
-                echo '</div>';
-            }
-        } else {
-            echo 'No default links available.';
+    // Title with description
+    echo '<h2>Normal Links Settings</h2>';
+    echo '<p>Configure the default and custom links used for fetching job listings. Enable or disable each link or fetch data from the custom links section.</p>';
+
+    echo '<table class="form-table">';
+    echo '<tr>';
+    echo '<div class="default-links-container">';
+    echo '<th scope="row"><label for="rjobs_default_links">Default Links:</label></th>';
+    echo '<td>';
+    echo '<div class="default-links-list">';
+
+    // Checkboxes with descriptions
+    if (!empty($default_links)) {
+        foreach ($default_links as $index => $link_settings) {
+            $checked = isset($default_links_settings[$index]['enabled']) && $default_links_settings[$index]['enabled'] ? 'checked' : '';
+            $status = $checked ? '<span class="link-status-enabled">Enabled</span>' : '<span class="link-status-disabled">Disabled</span>';
+            echo '<div class="default-link-item">';
+            echo '<label><input type="checkbox" name="default_links[]" value="' . esc_attr($index) . '" ' . $checked . '> ' . esc_html($link_settings['name']) . ' - ' . $status . '</label>';
+            echo '</div>';
         }
-        echo '</div>';
-        echo '</td>';
-        echo '</div>';
-        echo '</tr>';
-        echo '</table>';
-        echo '<br><button type="submit" class="button button-primary">Save Changes</button>';
-        echo '</form>';
+    } else {
+        echo 'No default links available.';
+    }
+    echo '<p>Checking a box will enable the corresponding default link for job fetching. Unchecking it will disable the link.</p>';
 
+    echo '</div>';
+    echo '</td>';
+    echo '</div>';
+    echo '</tr>';
+    echo '</table>';
 
+    // Description for the checkboxes
+    
+
+    echo '<br><button type="submit" class="button button-primary">Save Changes</button>';
+    echo '</form>';
 
     // Display custom links
-
-        echo '<h3>Custom Links</h3>';
+    echo '<div style="margin: 50px 0px 10px 0px;">';
+    echo '<label style="font-weight: 600; font-size: 14px;">Custom Links:</label>';
+    echo '<p>You can fetch data to automatically add custom links or add them manually. You can also export the custom links or delete them as needed.</p>';
+    echo '</div>';
 
         // Display the import/export notice if it exists
         $import_notices = get_transient('rjobs_import_notices');
@@ -673,13 +889,18 @@ function rjobs_normal_links_settings_page() {
 
         
         // Container for import/export links
+        
         echo '<div class="rjobs-import-export-links">';
-        echo '<a href="#" id="rjobs-import-link" class="rjobs-link-with-icon"><i class="dashicons dashicons-upload"></i> Import Data</a>';
+        echo '<div id="rjobs-import-progress-bar" style="display:none;">';
+        echo '    <progress value="0" max="100">0%</progress>';
+        echo '   <span>Importing data...</span>';
+        echo '</div>';
+        echo '<a href="#" id="rjobs-import-link" class="rjobs-link-with-icon"><i class="dashicons dashicons-upload"></i> Fetch Data</a>';
         echo '<a href="#" id="rjobs-export-csv-link" class="rjobs-link-with-icon"><i class="dashicons dashicons-download"></i> Export Data as CSV</a>';
-        echo '<input type="file" id="rjobs-import-file" style="display: none;" />';
         echo '</div>'; // Close import/export links container
         
         echo '</div>'; // Close button container
+
         
         // Form for saving settings
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
@@ -866,34 +1087,62 @@ function rjobs_normal_links_settings_page() {
                         link.click();
                     });
             });
-        
-            // Trigger file input click for import
-            document.getElementById("rjobs-import-link").addEventListener("click", function(e) {
-                e.preventDefault();
-                document.getElementById("rjobs-import-file").click();
-            });
-        
-            // Handle file import
-            document.getElementById("rjobs-import-file").addEventListener("change", function(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        fetch("' . admin_url('admin-ajax.php') . '?action=rjobs_import_links", {
-                            method: "POST",
-                            body: e.target.result,
-                            headers: {
-                                "Content-Type": "text/csv"
-                            }
-                        })
-                        .then(response => response.text())
-                        .then(result => {
+    
+
+
+                document.getElementById("rjobs-import-link").addEventListener("click", function(e) {
+                    e.preventDefault();
+
+                    // Display the progress bar and reset styles
+                    var progressBar = document.getElementById("rjobs-import-progress-bar");
+                    var progressElement = progressBar.querySelector("progress");
+                    var statusSpan = progressBar.querySelector("span");
+                    progressBar.style.display = "block";
+                    progressElement.value = 0;
+                    progressElement.max = 100;
+                    progressBar.className = ""; // Reset classes
+                    statusSpan.textContent = "Importing data...";
+
+               
+
+                    // Send an AJAX request to import the CSV file from the server
+                    fetch(ajaxurl + "?action=rjobs_import_links", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Import was successful
+                            progressElement.value = 100;
+                            progressBar.classList.add("success");
+                            statusSpan.textContent = "Import completed successfully. " + data.data.new_domains + " new domain(s) added.";
+                        } else {
+                            // Import failed
+                            progressElement.value = 100;
+                            progressBar.classList.add("failure");
+                            statusSpan.textContent = "Import failed.";
+                        }
+                    })
+                    .catch(() => {
+                        // Handle fetch error
+                        progressElement.value = 100;
+                        progressBar.classList.add("failure");
+                        statusSpan.textContent = "Import failed.";
+                    })
+                    .finally(() => {
+                        // Hide the progress bar after a short delay
+                        setTimeout(() => {
+                            progressBar.style.display = "none";
                             location.reload(); // Reload the page to show the notice
-                        });
-                    };
-                    reader.readAsText(file);
-                }
-            });
+                        }, 2000); // Adjust timing as needed
+                    });
+                });
+
+
+
         
             // Select all checkboxes
             document.getElementById("rjobs-select-all").addEventListener("change", function() {
@@ -985,6 +1234,87 @@ function rjobs_normal_links_settings_page() {
 
 }
 
+add_action('wp_ajax_rjobs_import_links', 'rjobs_import_links');
+function rjobs_import_links() {
+    // Verify user permissions
+    if (!current_user_can('manage_options')) {
+        wp_die(__('You do not have sufficient permissions to access this page.'));
+    }
+
+    // Path to the CSV file inside the plugin folder
+    $csv_file_path = plugin_dir_path(__FILE__) . 'data/normal_links_file.csv';
+
+    if (!file_exists($csv_file_path)) {
+        wp_die(__('CSV file not found.'));
+    }
+
+    // Read the CSV file content
+    $csv_data = file_get_contents($csv_file_path);
+
+    // Parse the CSV data
+    $lines = explode(PHP_EOL, $csv_data);
+    $header = str_getcsv(array_shift($lines));
+    $new_links_settings = array();
+
+    // Fetch the existing custom links settings
+    $existing_links_settings = get_option('rjobs_custom_links_settings', array());
+
+    // Track existing domains to show notices
+    $existing_domains = array();
+    foreach ($existing_links_settings as $link_settings) {
+        $existing_domains[] = parse_url($link_settings['job_list_link'], PHP_URL_HOST);
+    }
+
+    // Process the imported data
+    $notices = array();
+    $new_domain_count = 0; // Counter for newly imported domains
+    foreach ($lines as $line) {
+        if (trim($line)) {
+            $data = str_getcsv($line);
+            $domain_name = parse_url($data[1], PHP_URL_HOST);
+
+            if (in_array($domain_name, $existing_domains)) {
+                $notices[] = "<li>The domain <strong style='color: red;'>$domain_name</strong> already exists.</li>";
+            } else {
+                $new_links_settings[] = array(
+                    'job_list_link' => $data[1],
+                    'job_link_classes' => $data[2],
+                    'job_title_field' => $data[3],
+                    'job_company_name_field' => $data[4],
+                    'job_type_field' => $data[5],
+                    'job_description_field' => $data[6],
+                    'job_company_logo_field' => $data[7],
+                    'job_application_url_field' => $data[8]
+                );
+                $existing_domains[] = $domain_name; // Add to existing domains to avoid duplicates in this import session
+                $new_domain_count++; // Increment the new domain count
+            }
+        }
+    }
+
+    // Save the new settings
+    if (!empty($new_links_settings)) {
+        $merged_links_settings = array_merge($existing_links_settings, $new_links_settings);
+        update_option('rjobs_custom_links_settings', $merged_links_settings);
+    }
+
+    // Set notices
+    if (!empty($notices)) {
+        $notice_content = '<ul style="margin: 0; padding: 0; list-style-type: none;">' . implode("\n", $notices) . '</ul>';
+        if ($new_domain_count > 0) {
+            $notice_content .= '<p><strong>Import successful:</strong> <span style="color: green; font-weight: bold;">' . $new_domain_count . ' new domain(s) added.</span></p>';
+        }
+        set_transient('rjobs_import_notices', $notice_content, 30); // Notice lasts for 30 seconds
+    } elseif ($new_domain_count > 0) {
+        set_transient('rjobs_import_notices', '<p><strong>Import successful:</strong> <span style="color: green; font-weight: bold;">' . $new_domain_count . ' new domain(s) added.</span></p>', 30);
+    } else {
+        set_transient('rjobs_import_notices', 'Import completed, but no new domains were added.', 30);
+    }
+
+    // Return success response
+    wp_send_json_success(array('new_domains' => $new_domain_count));
+}
+
 
 add_action('wp_ajax_rjobs_export_links', 'rjobs_export_links');
 
@@ -1055,88 +1385,9 @@ function esc_csv($value) {
 }
 
 
-add_action('wp_ajax_rjobs_import_links', 'rjobs_import_links');
-function rjobs_import_links() {
-    // Verify user permissions
-    if (!current_user_can('manage_options')) {
-        wp_die(__('You do not have sufficient permissions to access this page.'));
-    }
-
-    // Get the CSV data from the request body
-    $csv_data = file_get_contents('php://input');
-
-    // Parse the CSV data
-    $lines = explode(PHP_EOL, $csv_data);
-    $header = str_getcsv(array_shift($lines));
-    $new_links_settings = array();
-
-    // Fetch the existing custom links settings
-    $existing_links_settings = get_option('rjobs_custom_links_settings', array());
-
-    // Track existing domains to show notices
-    $existing_domains = array();
-    foreach ($existing_links_settings as $link_settings) {
-        $existing_domains[] = parse_url($link_settings['job_list_link'], PHP_URL_HOST);
-    }
-
-    // Process the imported data
-    $notices = array();
-    $new_domain_count = 0; // Counter for newly imported domains
-    foreach ($lines as $line) {
-        if (trim($line)) {
-            $data = str_getcsv($line);
-            $domain_name = parse_url($data[1], PHP_URL_HOST);
-
-            if (in_array($domain_name, $existing_domains)) {
-
-                $notices[] = "<li>The domain <strong style='color: red;'>$domain_name</strong> already exists.</li>";
-            } else {
-                $new_links_settings[] = array(
-                    'job_list_link' => $data[1],
-                    'job_link_classes' => $data[2],
-                    'job_title_field' => $data[3],
-                    'job_company_name_field' => $data[4],
-                    'job_type_field' => $data[5],
-                    'job_description_field' => $data[6],
-                    'job_company_logo_field' => $data[7],
-                    'job_application_url_field' => $data[8]
-                );
-                $existing_domains[] = $domain_name; // Add to existing domains to avoid duplicates in this import session
-                $new_domain_count++; // Increment the new domain count
-
-                
-            }
-        }
-    }
-
-    // Save the new settings
-    if (!empty($new_links_settings)) {
-        $merged_links_settings = array_merge($existing_links_settings, $new_links_settings);
-        update_option('rjobs_custom_links_settings', $merged_links_settings);
-    }
-
-    // Set notices
-    if (!empty($notices)) {
-        // Create a notice for existing domains
-        $notice_content = '<ul style="margin: 0; padding: 0; list-style-type: none;">' . implode("\n", $notices) . '</ul>';
-        if ($new_domain_count > 0) {
-            $notice_content .= '<p><strong>Import successful:</strong> <span style="color: green; font-weight: bold;">' . $new_domain_count . ' new domain(s) added.</span></p>';
-        }
-        set_transient('rjobs_import_notices', $notice_content, 30); // Notice lasts for 30 seconds
-    } elseif ($new_domain_count > 0) {
-        // Success notice with count of new domains
-        set_transient('rjobs_import_notices', '<p><strong>Import successful:</strong> <span style="color: green; font-weight: bold;">' . $new_domain_count . ' new domain(s) added.</span></p>', 30);
-    } else {
-        // No new domains added, no additional success message
-        set_transient('rjobs_import_notices', 'Import completed, but no new domains were added.', 30);
-    }
-        
 
 
-    // Redirect to the settings page
-    wp_redirect(esc_url(admin_url('admin.php?page=rjobs-settings&tab=normal')));
-    exit;
-}
+
 
 add_action('admin_post_rjobs_bulk_delete', 'rjobs_bulk_delete');
 function rjobs_bulk_delete() {
@@ -1301,22 +1552,24 @@ function rjobs_rss_feeds_settings_page() {
     echo '<form method="post" action="">';
     wp_nonce_field('rjobs_save_rss_settings', 'rjobs_rss_settings_nonce');
     echo '<h2>RSS Feeds Settings</h2>';
+    echo '<p>Configure your RSS feeds here. You can select default RSS feeds or add custom RSS feed URLs manually. Make sure to save your settings after making changes.</p>';
     echo '<table class="form-table">';
 
     // Display default RSS feeds with checkboxes
     echo '<tr>';
-    echo '<th scope="row"><label for="rjobs_default_rss_feeds">Default RSS Feeds</label></th>';
+    echo '<th scope="row"><label for="rjobs_default_rss_feeds">Default RSS Feeds:</label></th>';
     echo '<td>';
     foreach ($default_rss_feeds as $feed_url => $feed_name) {
         $checked = isset($saved_rss_feeds[$feed_url]) && $saved_rss_feeds[$feed_url]['enabled'] ? 'checked' : '';
         echo '<label><input type="checkbox" name="rjobs_default_rss_feeds[]" value="' . esc_url($feed_url) . '" ' . $checked . '> ' . esc_html($feed_name) . '</label><br>';
     }
+    echo '<p style="color: #3c434a; margin-top:10px !important; font-size: 13px !important;">Select the checkboxes to enable the corresponding default RSS feeds. These feeds will be used in the absence of custom RSS feeds.</p>';
     echo '</td>';
     echo '</tr>';
 
     // Display custom RSS feeds in a textarea
     echo '<tr>';
-    echo '<th scope="row"><label for="rjobs_custom_rss_feeds">Custom RSS Feeds</label></th>';
+    echo '<th scope="row"><label for="rjobs_custom_rss_feeds">Custom RSS Feeds: <span class="dashicons dashicons-editor-help" title="Enter each RSS feed URL on a new line. This will allow you to add feeds not included in the default list."></span></label></th>';
     $custom_feeds = array_keys(array_filter($saved_rss_feeds, function ($feed) {
         // Debugging output
         error_log(print_r($feed, true));
@@ -1328,33 +1581,235 @@ function rjobs_rss_feeds_settings_page() {
     echo '</table>';
     echo '<p class="submit"><input type="submit" name="rjobs_save_rss_settings" id="submit" class="button button-primary" value="Save Settings"></p>';
     echo '</form>';
+
+
 }
 
-
-function rjobs_settings_page()
+function rjobs_debug_settings_page()
 {
-    ?>
-        <div class="wrap">
-            <h1>Remote Jobs Aggregator Settings</h1>
-            <h2 class="nav-tab-wrapper">
-                <a href="?page=rjobs-settings&tab=main" class="nav-tab <?php echo (!isset($_GET['tab']) || $_GET['tab'] == 'main') ? 'nav-tab-active' : ''; ?>">Main Settings</a>
-                <a href="?page=rjobs-settings&tab=rss" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] == 'rss') ? 'nav-tab-active' : ''; ?>">RSS Feeds</a>
-                <a href="?page=rjobs-settings&tab=normal" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] == 'normal') ? 'nav-tab-active' : ''; ?>">Normal Links</a>
-            </h2>
-            <div class="tab-content">
-                <?php
-                if (isset($_GET['tab']) && $_GET['tab'] == 'rss') {
-                    rjobs_rss_feeds_settings_page();
-                } elseif (isset($_GET['tab']) && $_GET['tab'] == 'normal') {
-                    rjobs_normal_links_settings_page();
-                } else {
-                    rjobs_main_settings_page();
-                }
-                ?>
-            </div>
-        </div>
-    <?php
+    // Handle form submission to enable/disable debug mode
+    if (isset($_POST['rjobs_save_debug_settings']) && check_admin_referer('rjobs_save_debug_settings', 'rjobs_debug_settings_nonce')) {
+        $debug_mode = isset($_POST['rjobs_debug_mode']) ? 1 : 0;
+        update_option('rjobs_debug_mode', $debug_mode);
+
+        echo '<div class="notice notice-success is-dismissible"><p>Debug settings saved successfully!</p></div>';
+    }
+
+    // Handle clearing of logs
+    if (isset($_POST['rjobs_clear_logs']) && check_admin_referer('rjobs_clear_logs_nonce', 'rjobs_clear_logs_nonce')) {
+        // Clear the log file by simply writing an empty string to it
+        if (file_exists(WP_CONTENT_DIR . '/debug.log')) {
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', '');
+            echo '<div class="notice notice-success is-dismissible"><p>Logs cleared successfully!</p></div>';
+        } else {
+            echo '<div class="notice notice-error is-dismissible"><p>No logs found to clear.</p></div>';
+        }
+    }
+
+    $debug_mode = get_option('rjobs_debug_mode', 0); // Get the current debug mode setting
+
+    echo '<form method="post" action="">';
+    wp_nonce_field('rjobs_save_debug_settings', 'rjobs_debug_settings_nonce');
+    echo '<h2>Debug Mode Settings</h2>';
+    
+    // Checkbox to enable/disable debug mode
+    echo '<table class="form-table">';
+    echo '<tr>';
+    echo '<th scope="row"><label for="rjobs_debug_mode" class="rjobs-label">Debug Mode</label></th>';
+    echo '<td>';
+    echo '<input type="checkbox" name="rjobs_debug_mode" value="1" class="rjobs-checkbox" ' . checked(1, $debug_mode, false) . '> ';
+    echo '<p class="checkbox-title">Enable live debug mode for real-time troubleshooting.</p>';
+    echo '<p class="checkbox-description">When enabled, detailed debug information will be displayed to assist in troubleshooting plugin issues. Use with caution on live sites.</p>';
+    echo '</td>';
+    echo '</tr>';
+    echo '</table>';
+
+    echo '<p class="submit"><input type="submit" name="rjobs_save_debug_settings" id="submit" class="button button-primary" value="Save Debug Settings"></p>';
+    echo '</form>';
+
+
+    // Show debug logs if debug mode is enabled
+    if ($debug_mode) {
+        echo '<h2>Live Debug Operations</h2>';
+        echo '<div style="max-height: 300px; overflow-y: auto; background: #f9f9f9; padding: 10px; border: 1px solid #ddd;">';
+        
+        // Fetch plugin log data (assuming WordPress debug.log)
+        if (file_exists(WP_CONTENT_DIR . '/debug.log')) {
+            $log_contents = file_get_contents(WP_CONTENT_DIR . '/debug.log');
+            echo '<pre>' . esc_html($log_contents) . '</pre>';
+        } else {
+            echo '<p>No logs available.</p>';
+        }
+        echo '</div>';
+
+        // Clear logs button
+        echo '<form method="post" action="" style="margin-top: 15px;">';
+        wp_nonce_field('rjobs_clear_logs_nonce', 'rjobs_clear_logs_nonce');
+        echo '<p><input type="submit" name="rjobs_clear_logs" class="button button-secondary" value="Clear Logs"></p>';
+        echo '</form>';
+    }
 }
+
+
+function rjobs_settings_page() {
+    // Get the current tab
+    $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'main';
+    ?>
+    <div class="wrap">
+        <!-- Sticky Header section with logo, save button, and tabs -->
+        <div class="settings-header-wrap" style="background: #fff; margin: 0 -40px 20px; padding: 0 40px; position: sticky; top: var(--wp-admin--admin-bar--height, 32px); z-index: 1;">
+            <div class="job-aggregator-settings-header-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <div class="job-aggregator-settings-logo-wrap">
+                    <!-- Inline Image -->
+                    <img class="job-aggregator-settings-logo" src="https://jobs.bgathuita.com/wp-content/uploads/sites/2/2024/09/remote-job-aggregator.gif" alt="Settings Logo" style="height: 50px;">
+                </div>
+                <!-- Job Listings Button -->
+                <a href="?page=rjobs-listings" class="job-listing-button-primary" style="margin-left: auto;">Go to Job Listings</a>
+            </div>
+
+            <!-- Navigation tabs within the header -->
+            <h2 class="nav-tab-wrapper" style="margin-top: 10px;">
+                <a href="?page=rjobs-settings&tab=main" class="nav-tab <?php echo $active_tab == 'main' ? 'nav-tab-active' : ''; ?>">Main Settings</a>
+                <a href="?page=rjobs-settings&tab=rss" class="nav-tab <?php echo $active_tab == 'rss' ? 'nav-tab-active' : ''; ?>">RSS Feeds</a>
+                <a href="?page=rjobs-settings&tab=normal" class="nav-tab <?php echo $active_tab == 'normal' ? 'nav-tab-active' : ''; ?>">Normal Links</a>
+                <a href="?page=rjobs-settings&tab=debug" class="nav-tab <?php echo $active_tab == 'debug' ? 'nav-tab-active' : ''; ?>">Debug</a>
+            </h2>
+        </div>
+
+        <!-- This div mimics the placement of wp-header-end element -->
+        <div class="wp-header-end"></div>
+
+        <!-- WordPress Core Notices (.wp-core-ui .notice) should appear here -->
+        <?php
+        if (function_exists('get_settings_errors')) {
+            settings_errors(); // This will display any notices from WP core.
+        }
+        ?>
+
+        <!-- Custom Notices (if any) -->
+        <?php if (isset($_GET['settings-updated']) && $_GET['settings-updated'] == 'true') : ?>
+            <div class="updated notice notice-success is-dismissible">
+                <p>Settings saved successfully.</p>
+            </div>
+        <?php endif; ?>
+
+        <!-- Tab content -->
+        <div class="tab-content">
+            <?php
+            // Display different content based on the active tab
+            switch ($active_tab) {
+                case 'rss':
+                    rjobs_rss_feeds_settings_page();
+                    break;
+                case 'normal':
+                    rjobs_normal_links_settings_page();
+                    break;
+                case 'debug':
+                    rjobs_debug_settings_page(); // Debug page handler
+                    break;
+                default:
+                    rjobs_main_settings_page();
+                    break;
+            }
+            ?>
+        </div>
+    </div>
+    <?php
+
+echo '<style>
+      
+
+        /* Set field width for input and select elements */
+        .rjobs-field-width {
+            width: 400px;
+        }
+
+        /* Checkbox styling to ensure height is 1rem */
+        .rjobs-checkbox {
+            height: 1rem;
+            width: 1rem;
+            vertical-align: middle;
+        }
+        .rjobs-label {
+            position: relative;
+            padding-right: 24px;
+
+        }
+
+            /* Tooltip icon styling (if needed) */
+        .dashicons-editor-help {
+            color: #0073aa; /* Customize color as needed */
+            cursor: help;
+            margin-left: 5px;
+            font-size: 16px !important;
+        }
+        /* Style for checkbox title */
+        .checkbox-title {
+            color: #3c434a;
+            font-size: 14px; /* Adjust the font size for the title */
+            margin: 0.5rem 0; /* Space between the checkbox and the title */
+            display: inline-block 
+
+        }
+
+        /* Style for checkbox description */
+        .checkbox-description {
+            margin: 4px 0 8px !important;
+            color: #3c434a;
+            font-size: 12px !important; 
+            
+        }
+
+        .nav-tab-active, .nav-tab-active:focus, .nav-tab-active:focus:active, .nav-tab-active:hover {
+        border-bottom: 3px solid #5271ff !important;
+        background: white !important;
+        color: #000 !important;
+        }
+        .nav-tab {
+            background: white !important;
+            border-bottom: 3px solid white;
+            color: #000 !important;
+
+        }
+        .job-aggregator-settings-logo {
+            height: 70px !important;
+        }
+        .wrap{
+            margin: 0 40px 0 20px !important;
+            min-height: calc(100vh - 65px);
+        }
+
+
+        .job-listing-button-primary {
+            background: transparent !important;
+            border-color: #5271ff !important;
+            color: #1e2c55 !important;
+            display: inline-block;
+            text-decoration: none;
+            font-size: 13px;
+            line-height: 2.15384615;
+            min-height: 30px;
+            margin: 0;
+            padding: 0 10px;
+            cursor: pointer;
+            border-width: 1px;
+            border-style: solid;
+            -webkit-appearance: none;
+            border-radius: 3px;
+            white-space: nowrap;
+            box-sizing: border-box;
+
+        }
+
+        .job-listing-button-primary:hover {
+            background-color: #d9e1ff !important;
+            border-color: #5271ff !important;
+        }
+
+        </style>';
+}
+
+
 function rjobs_get_current_tab()
 {
     

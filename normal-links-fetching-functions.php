@@ -910,11 +910,14 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             ensure_category_exists($job_category);
 
 
+                    $post_status = get_option('rjobs_post_status', 'publish'); // Default to 'publish' if no status is selected
+
                     // Insert job post
+                    
                     $job_data = array(
                         'post_title' => sanitize_text_field($job_title),
                         'post_content' => $job_description,
-                        'post_status' => 'publish',
+                        'post_status'   => $post_status, 
                         'post_type' => 'job_listing',
                         'comment_status' => 'closed',
                         'ping_status' => 'closed',
