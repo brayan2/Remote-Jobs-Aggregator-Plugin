@@ -157,11 +157,13 @@ function rjobs_main_settings_page() {
     echo '<th scope="row">';
     echo '<label for="rjobs_clear_fetched_jobs" class="rjobs-label">Clear Job Data & Cache</label>';
     echo '</th>';
-    echo '<td><input type="checkbox" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox" ' . checked($clear_fetched_jobs, 1, false) . '> ';
+    echo '<td><input type="checkbox" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox"> ';
     echo '<p class="checkbox-title">Clear all fetched jobs data and cache.</p>';
     echo '<p class="checkbox-description">If checked, all the fetched jobs data and cache will be cleared from the database.</p>';
     echo '</td>';
     echo '</tr>';
+
+    
 
     // Manual Job Approval Checkbox
     echo '<tr>';
