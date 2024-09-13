@@ -463,7 +463,6 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         // Fallback: Search for company URL using defined HTML classes
                         $company_url_classes = [
                             'links_sm', // This class should be included to match the example provided
-                            'w-richtext',
                             'dib link dim grey-700',
                             'ppma-author-user_url-profile-data ppma-author-field-meta ppma-author-field-type-url',
                             'flex flex-wrap items-center gap-1 text-sm',
