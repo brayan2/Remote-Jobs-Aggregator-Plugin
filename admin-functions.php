@@ -1844,7 +1844,6 @@ function rjobs_listings_page()
         echo '<tr>';
         echo '<th>Job Title</th>';
         echo '<th>Company</th>';
-        echo '<th>Location</th>';
         echo '<th>Category</th>';
         echo '<th>Job Type</th>';
         echo '<th>Link</th>';
@@ -1853,13 +1852,16 @@ function rjobs_listings_page()
         echo '<tbody>';
 
         foreach ($jobs as $job) {
+            // Use the permalink for the job post
+            $job_id = $job['post_id']; // Ensure that post ID is included in the job data
+            $job_url = get_permalink($job_id); // Get the permalink for the job post
+
             echo '<tr>';
             echo '<td>' . esc_html($job['post_title']) . '</td>';
             echo '<td>' . esc_html($job['company_name']) . '</td>';
-            echo '<td>' . esc_html($job['job_location']) . '</td>';
             echo '<td>' . esc_html(implode(', ', $job['job_categories'])) . '</td>';
             echo '<td>' . esc_html($job['job_type']) . '</td>';
-            echo '<td><a href="' . esc_url($job['job_url']) . '" target="_blank">View Job</a></td>';
+            echo '<td><a href="' . esc_url($job_url) . '" target="_blank">View Job</a></td>';
             echo '</tr>';
         }
 
@@ -1869,6 +1871,8 @@ function rjobs_listings_page()
 
     echo '</div>';
 }
+
+
 function rjobs_get_all_jobs()
 {
     $args = array(

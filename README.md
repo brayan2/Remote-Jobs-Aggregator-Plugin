@@ -24,3 +24,9 @@ This plugin is licensed under [MIT License](LICENSE).
 = v1.0.2 =
 * Added Company Website to Normal Links.
 * Stripped special characters in description of remotive links.
+
+= v1.0.3 =
+* New Settings: Added more configuration options.
+* Removed job location column.
+* Updated job URL to use site's permalink structure.
+* URL Handling: Fixed job URL to match permalinks.
