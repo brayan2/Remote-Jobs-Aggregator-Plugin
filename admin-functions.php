@@ -152,16 +152,24 @@ function rjobs_main_settings_page() {
     echo '</td>';
     echo '</tr>';
 
+
+
     // Clear Fetched Jobs
     echo '<tr>';
     echo '<th scope="row">';
     echo '<label for="rjobs_clear_fetched_jobs" class="rjobs-label">Clear Job Data & Cache</label>';
     echo '</th>';
-    echo '<td><input type="checkbox" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox"> ';
+    echo '<td>';
+    echo '<input type="checkbox" id="rjobs_clear_fetched_jobs" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox"> ';
     echo '<p class="checkbox-title">Clear all fetched jobs data and cache.</p>';
     echo '<p class="checkbox-description">If checked, all the fetched jobs data and cache will be cleared from the database.</p>';
+
+    // Warning Note
+    echo '<p id="warning-note" class="warning-note" style=" display: none;">Warning: This action is irreversible. All job data, cache, and transients will be permanently deleted. Proceed with caution!</p>';
+
     echo '</td>';
     echo '</tr>';
+
 
     
 
@@ -200,21 +208,38 @@ function rjobs_main_settings_page() {
     // JavaScript for toggling post status section based on manual approval checkbox
     echo '<script>
     document.addEventListener("DOMContentLoaded", function() {
+        // Manual Approval Section
         const manualApprovalCheckbox = document.getElementById("rjobs_manual_approval");
         const postStatusSection = document.getElementById("post-status-section");
-
+    
         // Function to toggle post status section visibility
         function togglePostStatus() {
             postStatusSection.style.display = manualApprovalCheckbox.checked ? "table-row" : "none";
         }
-
+    
         // Initial toggle on page load
         togglePostStatus();
-
+    
         // Event listener for manual approval checkbox
         manualApprovalCheckbox.addEventListener("change", togglePostStatus);
+    
+        // Clear Jobs Section
+        const clearJobsCheckbox = document.getElementById("rjobs_clear_fetched_jobs");
+        const warningNote = document.getElementById("warning-note");
+    
+        // Function to toggle warning note visibility
+        function toggleWarningNote() {
+            warningNote.style.display = clearJobsCheckbox.checked ? "block" : "none";
+        }
+    
+        // Initial toggle on page load
+        toggleWarningNote();
+    
+        // Event listener for clear jobs checkbox change
+        clearJobsCheckbox.addEventListener("change", toggleWarningNote);
     });
     </script>';
+    
 }
 
 
@@ -259,8 +284,15 @@ function rjobs_clear_all_jobs() {
 
     $jobs = get_posts($args);
 
-    // Delete each fetched job
+    // Delete each fetched job and its attachments
     foreach ($jobs as $job) {
+        // Delete job attachments
+        $attachments = get_attached_media('', $job->ID);
+        foreach ($attachments as $attachment) {
+            wp_delete_attachment($attachment->ID, true); // Force delete each attachment
+        }
+
+        // Delete the job post
         wp_delete_post($job->ID, true); // Force delete each job post
     }
 
@@ -274,7 +306,6 @@ function rjobs_clear_all_jobs() {
         wp_cache_flush(); // Flushes all object caches
     }
 }
-
 
 
 function rjobs_normal_links_settings_page() {
@@ -1806,6 +1837,13 @@ echo '<style>
         .job-listing-button-primary:hover {
             background-color: #d9e1ff !important;
             border-color: #5271ff !important;
+        }
+
+        #warning-note {
+            color: red;
+            font-weight: 500;
+            display: block;
+            font-size: 12px !important;
         }
 
         </style>';
