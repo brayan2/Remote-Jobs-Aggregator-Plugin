@@ -1094,6 +1094,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             '_application' => sanitize_text_field($job_application_url), // Use sanitize_text_field to handle both email and URL
                             '_company_name'  => sanitize_text_field($job_company_name),
                             '_company_website' => esc_url_raw($job_company_url),
+                            '_source_link' => esc_url_raw($job_list_link),
                         )
                     );
 

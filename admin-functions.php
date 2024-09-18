@@ -1874,13 +1874,24 @@ function rjobs_listings_page()
 
     // Display fetched jobs
     $jobs = rjobs_get_all_jobs();
+    $job_count = count($jobs); // Count the number of jobs
+
+
 
     if (empty($jobs)) {
         echo '<p>No jobs found.</p>';
     } else {
+        // Job counter display aligned to the right
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">';
+        echo '<div></div>'; // Empty div for left alignment
+        echo '<div style="text-align: right;"><strong>Total Jobs Fetched: ' . esc_html($job_count) . '</strong></div>';
+        echo '</div>';
+
+
         echo '<table class="wp-list-table widefat fixed striped">';
         echo '<thead>';
         echo '<tr>';
+        echo '<th>Source</th>'; // New column for the source link
         echo '<th>Job Title</th>';
         echo '<th>Company</th>';
         echo '<th>Category</th>';
@@ -1895,7 +1906,15 @@ function rjobs_listings_page()
             $job_id = $job['post_id']; // Ensure that post ID is included in the job data
             $job_url = get_permalink($job_id); // Get the permalink for the job post
 
+            // Extract domain name from source link
+            $source_url = parse_url($job['source_link'], PHP_URL_HOST); // Extract the host (domain)
+            
+            // Remove "www." and the top-level domain (e.g., ".com", ".org")
+            $source_domain = preg_replace('/^www\./', '', $source_url); // Remove "www." prefix if present
+            $source_domain = preg_replace('/\.[a-z]{2,}$/', '', $source_domain); // Remove the TLD (e.g., ".com", ".org", ".net")
+
             echo '<tr>';
+            echo '<td>' . esc_html($source_domain) . '</td>';
             echo '<td>' . esc_html($job['post_title']) . '</td>';
             echo '<td>' . esc_html($job['company_name']) . '</td>';
             echo '<td>' . esc_html(implode(', ', $job['job_categories'])) . '</td>';
@@ -1910,6 +1929,7 @@ function rjobs_listings_page()
 
     echo '</div>';
 }
+
 
 
 function rjobs_get_all_jobs()
@@ -1931,8 +1951,10 @@ function rjobs_get_all_jobs()
             $company_name = get_post_meta($post_id, '_company_name', true);
             $job_location = get_post_meta($post_id, '_job_location', true);
             $job_type = get_post_meta($post_id, '_job_type', true);
+            $source_link = get_post_meta($post_id, '_source_link', true);
 
             $categories = wp_get_post_terms($post_id, 'job_listing_category', array('fields' => 'names'));
+            
 
             $jobs[] = array(
                 'post_title' => get_the_title(),
@@ -1940,7 +1962,9 @@ function rjobs_get_all_jobs()
                 'job_location' => $job_location,
                 'job_categories' => $categories,
                 'job_type' => $job_type,
+                'source_link' => $source_link,
                 'job_url' => get_post_meta($post_id, '_application', true),
+                
             );
         }
         wp_reset_postdata();
