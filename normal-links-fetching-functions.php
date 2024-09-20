@@ -856,6 +856,34 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             break; // Stop checking classes once job description is found
                         }
                     }
+                    // If the description is still not found, try fetching from JSON-LD
+                    if (empty($job_description)) {
+                        $json_ld_elements = $job_xpath->query("//script[@type='application/ld+json']");
+
+                        foreach ($json_ld_elements as $json_ld_element) {
+                            $json_ld_content = $json_ld_element->nodeValue; // Get the JSON content
+
+                            // Decode the JSON-LD content
+                            $json_data = json_decode($json_ld_content, true);
+
+                            // Check if it's a JobPosting schema and has a description
+                            if (isset($json_data['@type']) && strtolower($json_data['@type']) === 'jobposting' && !empty($json_data['description'])) {
+                                $job_description = $json_data['description'];
+
+                                // Log the fetching of the description from JSON-LD
+                                error_log("Job description fetched from JSON-LD schema.");
+
+                                // Break the loop once the description is found
+                                break;
+                            }
+                        }
+
+                        // Handle the case where description is still missing
+                        if (empty($job_description)) {
+                            error_log("Job description not found in JSON-LD or other sources.");
+                        }
+                    }
+
 
 
 
@@ -1087,22 +1115,39 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         $link_indexes[$index]++;
                         continue;
                     }
-                        // Log errors if job details are not found
-                        if (empty($job_title) || empty($job_description)) {
-                            error_log("Missing job details for job link: $job_url. 
-                                Job Title Classes: " . json_encode($job_title_classes) . ", 
-                                Job Company Name Classes: " . json_encode($job_company_name_classes) . ", 
-                                Job Description Classes: " . json_encode($job_description_classes) . ", 
-                                Job Application URL Classes: " . json_encode($job_application_url_classes));
-                            $link_indexes[$index]++;
-                            continue; // Skip to next job URL
-                        }
 
-                        // Determine job category based on the job title
-                        $job_category = determine_job_category($job_title, $categories_keywords);
+                    // Log errors if specific job details are missing
+                    $missing_details = array(); // Array to hold missing fields
 
-                        // Ensure the job category exists
-                        ensure_category_exists($job_category);
+                    if (empty($job_title)) {
+                        $missing_details[] = 'Job Title';
+                    }
+
+                    if (empty($job_company_name)) {
+                        $missing_details[] = 'Company Name';
+                    }
+
+                    if (empty($job_description)) {
+                        $missing_details[] = 'Job Description';
+                    }
+
+                    if (empty($job_application_url)) {
+                        $missing_details[] = 'Application URL';
+                    }
+
+                    if (!empty($missing_details)) {
+                        // Log which specific job details are missing
+                        error_log("Missing job details for job link: $job_url. Missing fields: " . implode(', ', $missing_details));
+                        $link_indexes[$index]++;
+                        continue; // Skip to the next job URL
+                    }
+
+                    // Determine job category based on the job title
+                    $job_category = determine_job_category($job_title, $categories_keywords);
+
+                    // Ensure the job category exists
+                    ensure_category_exists($job_category);
+
 
 
 
