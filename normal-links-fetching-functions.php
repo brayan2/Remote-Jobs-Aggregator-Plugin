@@ -248,6 +248,16 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         continue; // Skip to next job URL
                     }
 
+                    // Fetch job details HTML content
+                    $job_response = wp_remote_get($job_url, array('timeout' => 30)); // Increase timeout if necessary
+                    if (is_wp_error($job_response)) {
+                        $error_log = 'Error fetching job link: ' . $job_response->get_error_message();
+                        error_log($error_log);
+                        // Move to the next job link
+                        $link_indexes[$index]++;
+                        continue; // Skip to next job URL
+                    }
+
 
                     $job_body = wp_remote_retrieve_body($job_response);
 
@@ -417,44 +427,65 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             error_log("No company name found using class: $class");
                         }
                     }
+                    // Fetch all <script> elements with type 'application/ld+json'
+                    $json_ld_elements = $job_xpath->query("//script[@type='application/ld+json']");
 
-                    // If no company name was found using HTML classes, try extracting it from JSON-LD schema
-                    if (empty($job_company_name)) {
-                        // Fetch all <script> elements with type 'application/ld+json'
-                        $json_ld_elements = $job_xpath->query("//script[@type='application/ld+json']");
-                        foreach ($json_ld_elements as $json_ld_element) {
-                            $json_content = $json_ld_element->nodeValue;
-                            // Decode the JSON content
-                            $json_data = json_decode($json_content, true);
+                    foreach ($json_ld_elements as $json_ld_element) {
+                        // Get the content of the <script> tag
+                        $json_content = trim($json_ld_element->nodeValue);
 
-                            // Check if $json_data is an array (handles multiple JSON-LD items)
-                            if (is_array($json_data)) {
-                                // Handle cases where JSON-LD may be an array of objects
-                                foreach ($json_data as $json_item) {
-                                    if (isset($json_item['hiringOrganization']['@type']) 
-                                        && $json_item['hiringOrganization']['@type'] === 'Organization' 
-                                        && isset($json_item['hiringOrganization']['name'])) {
-                                        $job_company_name = $json_item['hiringOrganization']['name'];
-                                        error_log("Company name fetched from schema: $job_company_name");
-                                        break 2; // Stop after finding the first matching schema
-                                    }
-                                }
-                            } else {
-                                // Single JSON-LD object handling
-                                if (isset($json_data['hiringOrganization']['@type']) 
-                                    && $json_data['hiringOrganization']['@type'] === 'Organization' 
-                                    && isset($json_data['hiringOrganization']['name'])) {
-                                    $job_company_name = $json_data['hiringOrganization']['name'];
-                                    error_log("Company name fetched from schema: $job_company_name");
-                                    break; // Stop after finding the first matching schema
-                                }
+                        // Check if the script has the class 'aioseo-schema' or contains '@graph'
+                        if ($json_ld_element->hasAttribute('class') && 
+                            $json_ld_element->getAttribute('class') === 'aioseo-schema') {
+                            error_log("Skipping script with class 'aioseo-schema'.");
+                            continue; // Skip this iteration
+                        }
+
+                        // Check if the script contains '@graph', which is typically used by AIOSEO
+                        if (strpos($json_content, '@graph') !== false) {
+                            error_log("Skipping script containing '@graph'.");
+                            continue; // Skip this iteration
+                        }
+
+                        // Decode the JSON content
+                        $json_data = json_decode($json_content, true);
+
+                        // Check for JSON decode errors
+                        if (json_last_error() !== JSON_ERROR_NONE) {
+                            error_log('JSON decode error: ' . json_last_error_msg());
+                            continue; // Skip if the JSON couldn't be decoded
+                        }
+
+                        // Check if the JSON is of type 'JobPosting'
+                        if (isset($json_data['@type']) && $json_data['@type'] === 'JobPosting') {
+                            // Check for 'hiringOrganization'
+                            if (isset($json_data['hiringOrganization']) && 
+                                isset($json_data['hiringOrganization']['@type']) && 
+                                $json_data['hiringOrganization']['@type'] === 'Organization' && 
+                                isset($json_data['hiringOrganization']['name'])) {
+                                    
+                                // Extract the company name from hiringOrganization
+                                $job_company_name = $json_data['hiringOrganization']['name'];
+                                error_log("Company name fetched from hiringOrganization: $job_company_name");
+                                break; // Stop after finding the first matching company name
                             }
                         }
 
-                        // If no company name was found in the schema, log the result
-                        if (empty($job_company_name)) {
-                            error_log("No company name found in schema.");
+                        // Check for 'identifier' structure as a fallback
+                        if (isset($json_data['identifier']) && 
+                            isset($json_data['identifier']['@type']) && 
+                            $json_data['identifier']['@type'] === 'PropertyValue' && 
+                            isset($json_data['identifier']['name'])) {
+                            // Extract the company name from PropertyValue
+                            $job_company_name = $json_data['identifier']['name'];
+                            error_log("Company name fetched from PropertyValue: $job_company_name");
+                            break; // Stop after finding the first matching company name
                         }
+                    }
+
+                    // If no company name was found in the schema, log the result
+                    if (empty($job_company_name)) {
+                        error_log("No company name found in schema.");
                     }
 
                     // Final logging of company name
@@ -1047,9 +1078,6 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
 
 
 
-
-
-
                     // Check if job exists in WP Job Manager
                     $existing_job = rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url);
 
@@ -1094,7 +1122,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             '_application' => sanitize_text_field($job_application_url), // Use sanitize_text_field to handle both email and URL
                             '_company_name'  => sanitize_text_field($job_company_name),
                             '_company_website' => esc_url_raw($job_company_url),
-                            '_source_link' => esc_url_raw($job_list_link),
+                            '_source_link' => esc_url_raw($job_url),
                         )
                     );
 
@@ -1107,6 +1135,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         $fetched_job_count++;
                         $link_indexes[$index]++; // Move to the next job link for this main link list
                             // Log the assignment of job type
+                        update_post_meta($job_id, '_source_link', esc_url_raw($job_url));
                         if (!empty($job_type)) {
                             // Check if the term exists
                             $term = get_term_by('name', $job_type, 'job_listing_type');
@@ -1135,6 +1164,8 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                         error_log($error_log);
                     }
 
+                   
+
                     // Optionally, update post meta or add additional meta fields if needed
                     update_post_meta($job_id, '_job_type', $job_type);
                   
@@ -1154,6 +1185,9 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     $error_log = 'Error processing job link: ' . $job_url . '. Exception: ' . $e->getMessage();
                     error_log($error_log);
                 }
+
+                delete_transient('rjobs_link_indexes'); // Example of clearing a transient, adjust as needed
+
 
                 
                 // Move to the next job link
@@ -1250,7 +1284,7 @@ function is_url_valid($url) {
     // Set cURL options to make a HEAD request
     curl_setopt($ch, CURLOPT_NOBODY, true); // Don't download the body
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Return the response
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // Timeout after 10 seconds
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60); // Timeout after 10 seconds
     
     // Execute the cURL request
     curl_exec($ch);
