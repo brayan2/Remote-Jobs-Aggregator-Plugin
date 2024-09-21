@@ -2132,26 +2132,56 @@ function rjobs_listings_page() {
          echo '<div class="notice notice-error"><p>No jobs found based on the selected filters.</p></div>';
      } elseif ($job_count > 0) {
          echo '<table class="wp-list-table widefat fixed striped">';
-         echo '<thead><tr><th>Source</th><th>Job Title</th><th>Company</th><th>Category</th><th>Job Type</th><th>Fetched Date</th><th><i class="fas fa-info-circle" style="font-weight: bold;"></i></th><th>Link</th></tr></thead>';
+         echo '<thead><tr><th>Source</th><th>Job Title</th><th>Company</th><th>Category</th><th>Job Type</th><th>Fetched Date</th><th class="status-cell tooltip">
+        <span class="tooltiptext">Status</span>
+        <i class="fas fa-info-circle"></i>
+    </th><th>Link</th></tr></thead>';
          echo '<tbody>';
  
          foreach ($jobs as $job) {
-             $job_url = get_permalink($job['post_id']);
-             $source_domain = parse_url($job['source_link'], PHP_URL_HOST);
-             $status_icon = $job['status'] === 'success' ? '<span style="color: green;">✔</span>' : '<span style="color: orange;">✖</span>';
-             $status_tooltip = $job['status'] === 'success' ? 'Fetched Successfully' : 'Skipped';
- 
-             echo '<tr>';
-             echo '<td>' . esc_html($source_domain ? $source_domain : 'Unknown') . '</td>';
-             echo '<td>' . esc_html($job['post_title']) . '</td>';
-             echo '<td>' . esc_html($job['company_name']) . '</td>';
-             echo '<td>' . esc_html(implode(', ', $job['job_categories'])) . '</td>';
-             echo '<td>' . esc_html($job['job_type']) . '</td>';
-             echo '<td>' . esc_html($job['fetched_date']) . '</td>';
-             echo '<td class="status-cell"><span class="tooltip">' . $status_icon . '<span class="tooltiptext">' . esc_html($status_tooltip) . '</span></span></td>';
-             echo '<td>' . ($job['status'] === 'success' ? '<a href="' . esc_url($job_url) . '" target="_blank">View Job</a>' : 'No Link') . '</td>';
-             echo '</tr>';
-         }
+            $job_url = get_permalink($job['post_id']);
+            $source_domain = parse_url($job['source_link'], PHP_URL_HOST);
+            
+            // New status logic
+            $status_icons = '';
+            $tooltip_texts = [];
+        
+            if ($job['status'] === 'success') {
+                $status_icons .= '<span style="color: green;">✔</span>';
+                $tooltip_texts[] = 'Fetched';
+        
+                $post_status = get_post_status($job['post_id']);
+                if ($post_status === 'publish') {
+                    $status_icons .= '<span style="color: green;">✔</span>';
+                    $tooltip_texts[] = 'Published';
+                } elseif ($post_status === 'draft') {
+                    $status_icons .= '<span style="color: gray;" title="Draft">🏳️</span>';
+                    $tooltip_texts[] = 'Draft';
+                } elseif ($post_status === 'pending') {
+                    $status_icons .= '<span style="color: orange;">⏳</span>';
+                    $tooltip_texts[] = 'Pending';
+                }
+            } else {
+                $status_icons .= '<span style="color: red;">✖</span>';
+                $tooltip_texts[] = 'Skipped';
+            }
+        
+            echo '<tr>';
+            echo '<td>' . esc_html($source_domain ? $source_domain : 'Unknown') . '</td>';
+            echo '<td>' . esc_html($job['post_title']) . '</td>';
+            echo '<td>' . esc_html($job['company_name']) . '</td>';
+            echo '<td>' . esc_html(implode(', ', $job['job_categories'])) . '</td>';
+            echo '<td>' . esc_html($job['job_type']) . '</td>';
+            echo '<td>' . esc_html($job['fetched_date']) . '</td>';
+            echo '<td class="status-cell">
+                    <span class="tooltip">' . $status_icons . '
+                    <span class="tooltiptext">' . esc_html(implode(' & ', $tooltip_texts)) . '</span>
+                    </span>
+                  </td>';
+            echo '<td>' . ($job['status'] === 'success' ? '<a href="' . esc_url($job_url) . '" target="_blank">View Job</a>' : 'No Link') . '</td>';
+            echo '</tr>';
+        }
+        
  
          echo '</tbody></table>';
      }
@@ -2222,14 +2252,34 @@ function rjobs_listings_page() {
         font-size: 14px;
     }
 
+    
     .status-cell {
+        position: relative;
         text-align: center;
     }
 
-    .tooltip {
-        position: relative;
+    .status-cell .tooltiptext {
+        visibility: hidden;
+        background-color: #555;
+        color: #fff;
+        padding: 5px;
+        border-radius: 4px;
+        position: absolute;
+        bottom: 125%; /* Adjusted for horizontal alignment */
+        left: 100%; /* Positioned to the right of the icon */
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 1;
+        white-space: nowrap; /* Prevents text wrapping */
     }
+ 
 
+    .status-cell:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+    
     .tooltip .tooltiptext {
         visibility: hidden;
         background-color: #555;
@@ -2237,17 +2287,43 @@ function rjobs_listings_page() {
         padding: 5px;
         border-radius: 4px;
         position: absolute;
-        bottom: 100%;
+        bottom: 125%; /* Position above the icon */
         left: 50%;
         transform: translateX(-50%);
         opacity: 0;
         transition: opacity 0.3s;
+        z-index: 1; /* Ensure it appears above other elements */
     }
 
     .tooltip:hover .tooltiptext {
         visibility: visible;
         opacity: 1;
     }
+
+    .tooltiptext::after {
+        content: "";
+        position: absolute;
+        top: 100%; /* Position it below the tooltip */
+        left: 50%; /* Center it horizontally */
+        margin-left: -5px; /* Center the arrow */
+        border-width: 5px; /* Size of the arrow */
+        border-style: solid;
+        border-color: #555 transparent transparent transparent; /* Arrow color */
+    }
+
+
+
+    .tooltip {
+        position: relative;
+        display: inline-block;
+        margin-right: 5px; /* Add space between icons */
+    }
+
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+
     </style>';
 
     echo '</div>'; // End of Wrapper
