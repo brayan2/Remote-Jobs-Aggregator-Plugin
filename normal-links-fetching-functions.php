@@ -212,6 +212,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             if (!filter_var($job_url, FILTER_VALIDATE_URL)) {
                                 $error_log = "Invalid job URL: $job_url";
                                 error_log($error_log);
+                                $status = 'skipped';
                                 // Move to the next job link
                                 $link_indexes[$index]++;
                                 continue; // Skip to next job URL
@@ -253,6 +254,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     if (is_wp_error($job_response)) {
                         $error_log = 'Error fetching job link: ' . $job_response->get_error_message();
                         error_log($error_log);
+                        $status = 'skipped';
                         // Move to the next job link
                         $link_indexes[$index]++;
                         continue; // Skip to next job URL
@@ -319,6 +321,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     $job_company_name = '';
                     $job_company_url = ''; 
                     $found_job_types = array();
+                    $status = null;
 
 
 
@@ -1105,42 +1108,41 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
 
 
 
+                    // Define required fields and initialize them
+                    $required_fields = array(
+                        'Job Title' => $job_title,
+                        'Company Name' => $job_company_name,
+                        'Job Description' => $job_description,
+                        'Application URL' => $job_application_url,
+                    );
 
-                    // Check if job exists in WP Job Manager
-                    $existing_job = rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url);
-
-                    if ($existing_job) {
-                        // Job exists in WP Job Manager, skip fetching
+                    // Check if the job already exists in WP Job Manager
+                    if (rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url)) {
                         error_log("Skipping existing job: $job_title");
                         $link_indexes[$index]++;
-                        continue;
+                        continue; // Move to the next job URL
                     }
 
-                    // Log errors if specific job details are missing
-                    $missing_details = array(); // Array to hold missing fields
+                    // Filter out any missing fields
+                    $missing_details = array_filter($required_fields, function($value) {
+                        return empty($value);
+                    });
 
-                    if (empty($job_title)) {
-                        $missing_details[] = 'Job Title';
-                    }
-
-                    if (empty($job_company_name)) {
-                        $missing_details[] = 'Company Name';
-                    }
-
-                    if (empty($job_description)) {
-                        $missing_details[] = 'Job Description';
-                    }
-
-                    if (empty($job_application_url)) {
-                        $missing_details[] = 'Application URL';
-                    }
-
+                    // If there are missing fields, log them and skip the job
                     if (!empty($missing_details)) {
-                        // Log which specific job details are missing
-                        error_log("Missing job details for job link: $job_url. Missing fields: " . implode(', ', $missing_details));
+                        $missing_field_names = implode(', ', array_keys($missing_details));
+                        error_log("Missing job details for job link: $job_url. Missing fields: $missing_field_names");
+                        $status = 'skipped'; // Mark as skipped
                         $link_indexes[$index]++;
                         continue; // Skip to the next job URL
                     }
+
+                    // If all required fields are present, set status to 'success'
+                    $status = 'success';
+
+
+
+
 
                     // Determine job category based on the job title
                     $job_category = determine_job_category($job_title, $categories_keywords);
@@ -1150,7 +1152,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
 
 
 
-
+                if ($status === 'success') {
 
                     $post_status = get_option('rjobs_post_status', 'publish'); // Default to 'publish' if no status is selected
 
@@ -1168,6 +1170,7 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                             '_company_name'  => sanitize_text_field($job_company_name),
                             '_company_website' => esc_url_raw($job_company_url),
                             '_source_link' => esc_url_raw($job_url),
+                            'status'           => $status,
                         )
                     );
 
@@ -1207,7 +1210,9 @@ if (empty($default_link_settings) && empty($custom_link_settings)) {
                     } else {
                         $error_log = 'Error inserting job post: ' . $job_id->get_error_message();
                         error_log($error_log);
+                        $status = 'skipped';
                     }
+                }
 
                    
 
@@ -1291,35 +1296,57 @@ function adjust_job_link($job_list_link, $job_link) {
 }
 
 
-// Check if a job already exists in WP Job Manager based on application URL.
+// Check if job exists in WP Job Manager based on title and application URL.
 function rjobs_job_exists_in_wp_job_manager($job_title, $job_application_url = '') {
-    // Query WP Job Manager for existing jobs with the given application URL
+    // Prepare meta query array
+    $meta_query = array();
+
+    // Prepare the query arguments
     $args = array(
         'post_type' => 'job_listing',
         'post_status' => 'publish',
-        'meta_query' => array(
-            'relation' => 'AND',
-            array(
-                'key' => '_application', // Ensure this matches your meta key
-                'value' => $job_application_url,
-                'compare' => '='
-            )
-        ),
-        's' => $job_title, // Search for the job title in post content
-        'posts_per_page' => 1
+        'posts_per_page' => 1 // Limit to one post for efficiency
     );
 
+    // First, check for similar job titles using a custom field
+    if (!empty($job_title)) {
+        $args['s'] = $job_title; // Search for the job title in the post content
+    }
+
+    // Execute the query to check if the job exists by title
     $query = new WP_Query($args);
-    
+
     // Log the check for debugging
     error_log("Checking if job exists in WP Job Manager: Title: $job_title, Application URL: $job_application_url");
 
+    // If a job is found by title, return it
     if ($query->have_posts()) {
-        return $query->posts[0]; // Return the post object if it exists
-    } else {
-        return null; // Return null if the job does not exist
+        return $query->posts[0]; // Return the existing job post
     }
+
+    // If no job found by title, check for application URL if it's provided
+    if (!empty($job_application_url)) {
+        $meta_query[] = array(
+            'key' => '_application', // Ensure this matches your meta key for the application URL
+            'value' => $job_application_url,
+            'compare' => '='
+        );
+
+        // Add the meta query to the arguments
+        $args['meta_query'] = $meta_query;
+
+        // Execute the query again to check if the job exists by application URL
+        $query = new WP_Query($args);
+
+        // Return the post object if the job exists, otherwise return null
+        if ($query->have_posts()) {
+            return $query->posts[0]; // Return the existing job post
+        }
+    }
+
+    return null; // No job found
 }
+
 
 
 function is_url_valid($url) {
@@ -1329,7 +1356,7 @@ function is_url_valid($url) {
     // Set cURL options to make a HEAD request
     curl_setopt($ch, CURLOPT_NOBODY, true); // Don't download the body
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Return the response
-    curl_setopt($ch, CURLOPT_TIMEOUT, 60); // Timeout after 10 seconds
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // Timeout after 10 seconds
     
     // Execute the cURL request
     curl_exec($ch);

@@ -22,30 +22,30 @@ add_action('admin_enqueue_scripts', 'rjobs_admin_scripts');
 
 // Add the admin menu and submenus
 function rjobs_admin_menu() {
-    // Set the "Settings" page as the main admin page
+    // Add the main "Remote Jobs" menu page (Settings page)
     add_menu_page(
         'Remote Job Settings', // Page title
         'Remote Jobs',         // Menu title
-        'manage_options',      // Capability
-        'rjobs-settings',      // Menu slug (this will be the slug for the settings page)
-        'rjobs_settings_page', // Function to display the settings page
+        'manage_options',      // Capability required to view the menu
+        'rjobs-settings',      // Menu slug (main menu page)
+        'rjobs_settings_page', // Callback function to display the settings page
         'dashicons-admin-site', // Icon for the menu
-        30
+        30                     // Position in the admin menu
     );
 
-    // Remove the main admin page by not adding it
-    // If you had any other submenus, you can keep only the ones you want
+    // Add a submenu for "Job Listings"
     add_submenu_page(
-        'rjobs-settings', // Parent slug (the settings page will be the only item)
-        'Job Listings',   // Page title
-        'Job Listings',   // Menu title
-        'manage_options', // Capability
-        'rjobs-listings', // Menu slug
-        'rjobs_listings_page' // Function to display the job listings page
+        'rjobs-settings',      // Parent slug (Settings menu)
+        'Job Listings',        // Page title for the listings page
+        'Job Listings',        // Submenu title (what appears in the admin menu)
+        'manage_options',      // Capability required to view the submenu
+        'rjobs-listings',      // Menu slug for the job listings page
+        'rjobs_listings_page'  // Callback function to display the job listings page
     );
 }
-
 add_action('admin_menu', 'rjobs_admin_menu');
+
+
 // Function to display admin notices
 function rjobs_display_admin_notices()
 {
@@ -71,25 +71,33 @@ function rjobs_main_settings_page() {
         $fetch_source = sanitize_text_field($_POST['rjobs_fetch_source']);
         $manual_approval = isset($_POST['rjobs_manual_approval']) ? 1 : 0;
 
-        $clear_fetched_jobs = isset($_POST['rjobs_clear_fetched_jobs']); // Check if checkbox is checked
+        $clear_fetched_jobs = isset($_POST['rjobs_clear_fetched_jobs']);
 
         // Post status management based on manual approval
-        $post_status = 'publish'; // Default to 'publish' if manual approval is not enabled
+        $post_status = 'publish';
         if ($manual_approval && isset($_POST['rjobs_post_status'])) {
-            $post_status = sanitize_text_field($_POST['rjobs_post_status']); // Get the selected post status
+            $post_status = sanitize_text_field($_POST['rjobs_post_status']);
         }
- 
-        // Update options
+
+        // Save options
         update_option('rjobs_num_jobs', $num_jobs);
         update_option('rjobs_schedule_frequency', $schedule_frequency);
         update_option('rjobs_fetch_source', $fetch_source);
         update_option('rjobs_manual_approval', $manual_approval);
         update_option('rjobs_post_status', $post_status);
 
+        // Save custom frequency options
+        $custom_minutes = absint($_POST['custom_minutes']);
+        $custom_hours = absint($_POST['custom_hours']);
+        $custom_days = absint($_POST['custom_days']);
+        update_option('custom_minutes', $custom_minutes);
+        update_option('custom_hours', $custom_hours);
+        update_option('custom_days', $custom_days);
+
         // Schedule or reschedule cron job
         rjobs_schedule_cron();
 
-        // Clear fetched jobs and cache if checkbox is checked
+        // Clear fetched jobs if checkbox is checked
         if ($clear_fetched_jobs) {
             rjobs_clear_all_jobs();
             echo '<div class="notice notice-success is-dismissible"><p>All fetched jobs and cached data have been cleared!</p></div>';
@@ -104,6 +112,11 @@ function rjobs_main_settings_page() {
     $fetch_source = get_option('rjobs_fetch_source', 'rss');
     $manual_approval = get_option('rjobs_manual_approval', 0);
     $post_status = get_option('rjobs_post_status', 'publish');
+
+    // Retrieve custom frequency options
+    $custom_minutes = get_option('custom_minutes', 0);
+    $custom_hours = get_option('custom_hours', 0);
+    $custom_days = get_option('custom_days', 0);
 
     // Render settings form
     echo '<form method="post" action="">';
@@ -128,13 +141,28 @@ function rjobs_main_settings_page() {
     echo '<span class="dashicons dashicons-editor-help" title="This determines how often the job fetching process runs."></span>';
     echo '</th>';
     echo '<td>';
-    echo '<select name="rjobs_schedule_frequency" class="rjobs-field-width">';
+    echo '<select name="rjobs_schedule_frequency" class="rjobs-field-width" id="schedule_frequency_select">';
     echo '<option value="minutely"' . selected($schedule_frequency, 'minutely', false) . '>Every 1 Minute</option>';
     echo '<option value="half_hourly"' . selected($schedule_frequency, 'half_hourly', false) . '>Every 30 Minutes</option>';
     echo '<option value="hourly"' . selected($schedule_frequency, 'hourly', false) . '>Every 1 Hour</option>';
     echo '<option value="twicedaily"' . selected($schedule_frequency, 'twicedaily', false) . '>Twice Daily</option>';
     echo '<option value="daily"' . selected($schedule_frequency, 'daily', false) . '>Daily</option>';
+    echo '<option value="custom"' . selected($schedule_frequency, 'custom', false) . '>Custom Frequency</option>';
     echo '</select>';
+
+    echo '<div id="custom_frequency_fields" style="display: ' . ($schedule_frequency === 'custom' ? 'block' : 'none') . '; width: 400px; margin-top: 10px;">';
+    echo '<div style="display: flex; justify-content: space-between; margin-bottom: 5px;">';
+    echo '<label for="custom_minutes" style="flex: 1; text-align: center;">Min</label>';
+    echo '<label for="custom_hours" style="flex: 1; text-align: center;">Hrs</label>';
+    echo '<label for="custom_days" style="flex: 1; text-align: center;">Days</label>';
+    echo '</div>';
+    echo '<div style="display: flex; justify-content: space-between;">';
+    echo '<input type="number" name="custom_minutes" id="custom_minutes" min="0" style="margin-right: 5px;" placeholder="0" value="' . esc_attr($custom_minutes) . '">';
+    echo '<input type="number" name="custom_hours" id="custom_hours" min="0" style="margin-right: 5px;" placeholder="0" value="' . esc_attr($custom_hours) . '">';
+    echo '<input type="number" name="custom_days" id="custom_days" min="0" style="margin-right: 5px;" placeholder="0" value="' . esc_attr($custom_days) . '">';
+    echo '</div>';
+    echo '</div>';
+
     echo '</td>';
     echo '</tr>';
 
@@ -151,9 +179,6 @@ function rjobs_main_settings_page() {
     echo '</select>';
     echo '</td>';
     echo '</tr>';
-
-
-    
 
     // Manual Job Approval Checkbox
     echo '<tr>';
@@ -192,54 +217,74 @@ function rjobs_main_settings_page() {
     echo '<input type="checkbox" id="rjobs_clear_fetched_jobs" name="rjobs_clear_fetched_jobs" value="1" class="rjobs-checkbox"> ';
     echo '<p class="checkbox-title">Clear all fetched jobs data and cache.</p>';
     echo '<p class="checkbox-description">If checked, all the fetched jobs data and cache will be cleared from the database.</p>';
-
-    // Warning Note
-    echo '<p id="warning-note" class="warning-note" style=" display: none;">Warning: This action is irreversible. All job data, cache, and transients will be permanently deleted. Proceed with caution!</p>';
-
+    echo '<p id="warning-note" class="warning-note" style="display: none;">Warning: This action is irreversible. All job data, cache, and transients will be permanently deleted. Proceed with caution!</p>';
     echo '</td>';
     echo '</tr>';
-    
 
     echo '</table>';
     echo '<p class="submit"><input type="submit" name="rjobs_save_main_settings" id="submit" class="button button-primary" value="Save Settings"></p>';
     echo '</form>';
 
-    // JavaScript for toggling post status section based on manual approval checkbox
+    // Add CSS styles for custom frequency fields
+    echo '<style>
+        #custom_frequency_fields {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        #custom_frequency_fields label {
+            margin: 0;
+            font-weight: bold;
+            flex: 1;
+            text-align: center;
+        }
+        #custom_frequency_fields {
+            display: flex;
+            flex-direction: column;
+            width: 400px; /* Set fixed width */
+        }
+        #custom_frequency_fields input[type="number"] {
+            width: 100%; /* Full width of their flex container */
+        }
+    </style>';
+
+    // JavaScript for toggling sections
     echo '<script>
     document.addEventListener("DOMContentLoaded", function() {
-        // Manual Approval Section
         const manualApprovalCheckbox = document.getElementById("rjobs_manual_approval");
         const postStatusSection = document.getElementById("post-status-section");
-    
-        // Function to toggle post status section visibility
+        const clearJobsCheckbox = document.getElementById("rjobs_clear_fetched_jobs");
+        const warningNote = document.getElementById("warning-note");
+        const scheduleFrequencySelect = document.getElementById("schedule_frequency_select");
+        const customFrequencyFields = document.getElementById("custom_frequency_fields");
+
         function togglePostStatus() {
             postStatusSection.style.display = manualApprovalCheckbox.checked ? "table-row" : "none";
         }
-    
-        // Initial toggle on page load
-        togglePostStatus();
-    
-        // Event listener for manual approval checkbox
-        manualApprovalCheckbox.addEventListener("change", togglePostStatus);
-    
-        // Clear Jobs Section
-        const clearJobsCheckbox = document.getElementById("rjobs_clear_fetched_jobs");
-        const warningNote = document.getElementById("warning-note");
-    
-        // Function to toggle warning note visibility
+
         function toggleWarningNote() {
             warningNote.style.display = clearJobsCheckbox.checked ? "block" : "none";
         }
-    
-        // Initial toggle on page load
+
+        function toggleCustomFrequencyFields() {
+            customFrequencyFields.style.display = scheduleFrequencySelect.value === "custom" ? "block" : "none";
+        }
+
+        // Initial toggles on page load
+        togglePostStatus();
         toggleWarningNote();
-    
-        // Event listener for clear jobs checkbox change
+        toggleCustomFrequencyFields();
+
+        // Event listeners
+        manualApprovalCheckbox.addEventListener("change", togglePostStatus);
         clearJobsCheckbox.addEventListener("change", toggleWarningNote);
+        scheduleFrequencySelect.addEventListener("change", toggleCustomFrequencyFields);
     });
     </script>';
-    
 }
+
 
 
 function rjobs_insert_job($job_data) {
@@ -1682,7 +1727,6 @@ function rjobs_debug_settings_page()
     }
 }
 
-
 function rjobs_settings_page() {
     // Get the current tab
     $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'main';
@@ -1849,6 +1893,7 @@ echo '<style>
 }
 
 
+
 function rjobs_get_current_tab()
 {
     
@@ -1858,8 +1903,132 @@ function rjobs_get_current_tab()
 
 // Function to display job listings page
 
-function rjobs_get_all_jobs()
-{
+
+
+function rjobs_listings_page() {
+    echo '<div class="wrap">';
+    echo '<h1>Job Listings</h1>';
+
+    // Fetching Status
+    $is_fetching_jobs = rjobs_is_cron_job_scheduled();
+    echo '<div class="notice notice-info"><p>' . ($is_fetching_jobs ? 'Jobs are currently being fetched.' : 'No jobs are currently being fetched.') . '</p></div>';
+
+    // Get filter options
+    $filter_options = array(
+        'sources' => array(),
+        'companies' => array(),
+        'dates' => array(),
+        'categories' => array(), // Added categories
+    );
+
+    // Collect unique filters
+    $args = array('post_type' => 'job_listing', 'posts_per_page' => -1);
+    $query = new WP_Query($args);
+    
+    if ($query->have_posts()) {
+        while ($query->have_posts()) {
+            $query->the_post();
+            
+            // Get the source link meta and parse the domain
+            $source_link = get_post_meta(get_the_ID(), '_source_link', true);
+            if ($source_link) {
+                // Make sure the URL has a scheme (http/https) to avoid parse_url issues
+                if (!preg_match("~^(?:f|ht)tps?://~i", $source_link)) {
+                    $source_link = "http://" . $source_link;
+                }
+                
+                $source_domain = parse_url($source_link, PHP_URL_HOST);
+                if ($source_domain) {
+                    $filter_options['sources'][] = $source_domain;
+                } else {
+                    error_log("Failed to parse URL: " . print_r($source_link, true));
+                }
+            }
+            
+            // Get the company name
+            $company_name = get_post_meta(get_the_ID(), '_company_name', true);
+            if ($company_name) {
+                $filter_options['companies'][] = $company_name;
+            }
+            
+            // Collect unique fetched dates (post dates)
+            $filter_options['dates'][] = get_the_date('Y-m-d'); // Use 'Y-m-d' format for date storage
+
+            
+            // Get job categories and merge them
+            $categories = wp_get_post_terms(get_the_ID(), 'job_listing_category', array('fields' => 'names'));
+            $filter_options['categories'] = array_merge($filter_options['categories'], $categories);
+        }
+        wp_reset_postdata();
+    }
+    
+    // Remove duplicates from each filter option
+    $filter_options['sources'] = array_unique($filter_options['sources']);
+    $filter_options['companies'] = array_unique($filter_options['companies']);
+    $filter_options['dates'] = array_unique($filter_options['dates']);
+    $filter_options['categories'] = array_unique($filter_options['categories']);
+    
+
+    // Job Count and Filter Form Wrapper
+    echo '<div class="job-filters-wrapper">';
+
+    // Filters form
+    echo '<form method="GET" action="' . esc_url(admin_url('admin.php')) . '">';
+    echo '<input type="hidden" name="page" value="rjobs-listings">'; // Ensure the page reloads the same admin page
+
+ 
+    // Source Link Filter Dropdown
+    echo '<select name="source_link"><option value="">Select Source Link</option>';
+    foreach ($filter_options['sources'] as $source) {
+        $selected = (isset($_GET['source_link']) && $_GET['source_link'] === $source) ? ' selected' : '';
+        echo '<option value="' . esc_attr($source) . '"' . $selected . '>' . esc_html($source) . '</option>';
+    }
+    echo '</select>';
+
+
+
+    // Company Name Filter
+    echo '<select name="company_name"><option value="">Select Company</option>';
+    foreach ($filter_options['companies'] as $company) {
+        $selected = (isset($_GET['company_name']) && $_GET['company_name'] === $company) ? ' selected' : '';
+        echo '<option value="' . esc_attr($company) . '"' . $selected . '>' . esc_html($company) . '</option>';
+    }
+    echo '</select>';
+
+    echo '<select name="fetched_date"><option value="">All Dates</option>';
+    foreach ($filter_options['dates'] as $date) {
+        $date_formatted = DateTime::createFromFormat('Y-m-d', $date)->format('F Y');
+        $selected = (isset($_GET['fetched_date']) && $_GET['fetched_date'] === $date_formatted) ? ' selected' : '';
+        echo '<option value="' . esc_attr($date_formatted) . '"' . $selected . '>' . esc_html($date_formatted) . '</option>';
+    }
+    echo '</select>';
+    
+    
+
+
+    // Job Category Filter
+    echo '<select name="job_category"><option value="">Select Category</option>';
+    foreach ($filter_options['categories'] as $category) {
+        $selected = (isset($_GET['job_category']) && $_GET['job_category'] === $category) ? ' selected' : '';
+        echo '<option value="' . esc_attr($category) . '"' . $selected . '>' . esc_html($category) . '</option>';
+    }
+    echo '</select>';
+
+    echo '<input type="submit" class="button button-primary" value="Filter">';
+    echo '</form>';
+
+
+
+    // Filters logic
+    $filters = array(
+        'source_link' => sanitize_text_field($_GET['source_link'] ?? ''),
+        'company_name' => sanitize_text_field($_GET['company_name'] ?? ''),
+        'fetched_date' => sanitize_text_field($_GET['fetched_date'] ?? ''),
+        'job_category' => sanitize_text_field($_GET['job_category'] ?? ''), // Added job_category filter
+    );
+
+    // Fetch and display filtered jobs
+    $jobs = array();
     $args = array(
         'post_type' => 'job_listing',
         'posts_per_page' => -1,
@@ -1867,110 +2036,236 @@ function rjobs_get_all_jobs()
         'order' => 'DESC',
     );
 
-    $query = new WP_Query($args);
-    $jobs = array();
-
-    if ($query->have_posts()) {
-        while ($query->have_posts()) {
-            $query->the_post();
-            $post_id = get_the_ID();
-            $company_name = get_post_meta($post_id, '_company_name', true);
-            $job_location = get_post_meta($post_id, '_job_location', true);
-            $job_type = get_post_meta($post_id, '_job_type', true);
-            $source_link = get_post_meta($post_id, '_source_link', true);  // Fetch the source link for this job
+    // Initialize meta query
+    $meta_query = array('relation' => 'AND');
+    if (!empty($filters['source_link'])) {
+        $source_link = trim($filters['source_link']);
+        
+        // Use REGEXP to match exact domain (match at the end of the URL or followed by a slash)
+        $meta_query[] = array(
+            'key'     => '_source_link',
+            'value'   => '^https?://(www\.)?' . preg_quote($source_link) . '(/|$)',  // Match with or without www and ending with / or end of string
+            'compare' => 'REGEXP',
+        );
+    }
+    
+    if (!empty($filters['company_name'])) {
+        $meta_query[] = array('key' => '_company_name', 'value' => $filters['company_name'], 'compare' => 'LIKE');
+    }
+    if (!empty($filters['fetched_date'])) {
+        // Extract month and year
+        $month_year = DateTime::createFromFormat('F Y', $filters['fetched_date']);
+        if ($month_year) {
+            $start_date = $month_year->modify('first day of this month')->format('Y-m-d');
+            $end_date = $month_year->modify('last day of this month')->format('Y-m-d');
             
-            error_log("Source link for job $post_id: $source_link"); // Log for debugging
-
-
-            $categories = wp_get_post_terms($post_id, 'job_listing_category', array('fields' => 'names'));
+            error_log("Filtering from $start_date to $end_date");
             
-
-            $jobs[] = array(
-                'post_id' => $post_id,
-                'post_title' => get_the_title(),
-                'company_name' => $company_name,
-                'job_location' => $job_location,
-                'job_categories' => $categories,
-                'job_type' => $job_type,
-                'source_link' => $source_link,
-                'job_url' => get_post_meta($post_id, '_application', true),
-                
-            );
+            // Adjusting query to filter by post_date using the BETWEEN clause
+            $query->set('date_query', array(
+                array(
+                    'after' => $start_date,
+                    'before' => $end_date,
+                    'inclusive' => true,
+                ),
+            ));
+        } else {
+            // Log if date parsing fails for debugging
+            error_log("Date parsing failed for: " . print_r($filters['fetched_date'], true));
         }
-        wp_reset_postdata();
     }
-
-    return $jobs;
-}
-function rjobs_listings_page()
-{
-    echo '<div class="wrap">';
-    echo '<h1>Job Listings</h1>';
-
-    // Check if jobs are currently being fetched
-    $is_fetching_jobs = rjobs_is_cron_job_scheduled();
-
-    // Display message if jobs are currently being fetched
-    if ($is_fetching_jobs) {
-        echo '<div class="notice notice-info"><p>Jobs are currently being fetched.</p></div>';
-    } else {
-        echo '<div class="notice notice-info"><p>No jobs are currently being fetched.</p></div>';
-    }
-
-    // Display fetched jobs
-    $jobs = rjobs_get_all_jobs();
-    $job_count = count($jobs); // Count the number of jobs
-
-
-
+    
+    
+    // If no jobs are found, log the meta_query for debugging
     if (empty($jobs)) {
-        echo '<p>No jobs found.</p>';
-    } else {
-        // Job counter display aligned to the right
-        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">';
-        echo '<div></div>'; // Empty div for left alignment
-        echo '<div style="text-align: right;"><strong>Total Jobs Fetched: ' . esc_html($job_count) . '</strong></div>';
-        echo '</div>';
-
-
-        echo '<table class="wp-list-table widefat fixed striped">';
-        echo '<thead>';
-        echo '<tr>';
-        echo '<th>Source</th>'; // New column for the source link
-        echo '<th>Job Title</th>';
-        echo '<th>Company</th>';
-        echo '<th>Category</th>';
-        echo '<th>Job Type</th>';
-        echo '<th>Link</th>';
-        echo '</tr>';
-        echo '</thead>';
-        echo '<tbody>';
-
-        foreach ($jobs as $job) {
-            // Use the permalink for the job post
-            $job_id = $job['post_id']; // Ensure that post ID is included in the job data
-            $job_url = get_permalink($job_id); // Get the permalink for the job post
-
-            // Get the source link from post meta
-            $source_link = $job['source_link'];
-            $source_domain = parse_url($source_link, PHP_URL_HOST); // Extract the domain from the source link
-
-            echo '<tr>';
-            echo '<td>' . esc_html($source_domain ? $source_domain : 'Unknown') . '</td>';
-            echo '<td>' . esc_html($job['post_title']) . '</td>';
-            echo '<td>' . esc_html($job['company_name']) . '</td>';
-            echo '<td>' . esc_html(implode(', ', $job['job_categories'])) . '</td>';
-            echo '<td>' . esc_html($job['job_type']) . '</td>';
-            echo '<td><a href="' . esc_url($job_url) . '" target="_blank">View Job</a></td>';
-            echo '</tr>';
-        }
-
-        echo '</tbody>';
-        echo '</table>';
+        error_log("Meta Query: " . print_r($meta_query, true));
+    }
+    
+    if (!empty($filters['job_category'])) {
+        $args['tax_query'] = array(
+            array(
+                'taxonomy' => 'job_listing_category', // Make sure to use your taxonomy slug
+                'field'    => 'name',
+                'terms'    => $filters['job_category'],
+            ),
+        );
+    }
+    
+    if (!empty($meta_query)) {
+        $args['meta_query'] = $meta_query;
     }
 
-    echo '</div>';
+     // Execute query
+     $query = new WP_Query($args);
+     $job_count = $query->found_posts; // Update job count based on filtered results
+ 
+     // Fetch jobs
+     if ($query->have_posts()) {
+         while ($query->have_posts()) {
+             $query->the_post();
+             $post_id = get_the_ID();
+             $jobs[] = array(
+                 'post_id' => $post_id,
+                 'post_title' => get_the_title(),
+                 'company_name' => get_post_meta($post_id, '_company_name', true),
+                 'job_categories' => wp_get_post_terms($post_id, 'job_listing_category', array('fields' => 'names')),
+                 'job_type' => get_post_meta($post_id, '_job_type', true),
+                 'source_link' => get_post_meta($post_id, '_source_link', true),
+                 'status' => get_post_meta($post_id, 'status', true) ?: 'skipped',
+                 'fetched_date' => get_the_date('Y-m-d', $post_id),
+             );
+         }
+         wp_reset_postdata();
+     }
+ 
+        // Job Count
+        echo '<div class="job-count"><strong>' . esc_html($job_count) . ' ' . _n('item', 'items', $job_count, 'text-domain') . '</strong></div>';
+
+
+   
+        echo '</div>'; // End of Wrapper
+
+
+     // Display jobs in a table
+     if ($job_count === 0 && !empty(array_filter($filters))) {
+         echo '<div class="notice notice-error"><p>No jobs found based on the selected filters.</p></div>';
+     } elseif ($job_count > 0) {
+         echo '<table class="wp-list-table widefat fixed striped">';
+         echo '<thead><tr><th>Source</th><th>Job Title</th><th>Company</th><th>Category</th><th>Job Type</th><th>Fetched Date</th><th><i class="fas fa-info-circle" style="font-weight: bold;"></i></th><th>Link</th></tr></thead>';
+         echo '<tbody>';
+ 
+         foreach ($jobs as $job) {
+             $job_url = get_permalink($job['post_id']);
+             $source_domain = parse_url($job['source_link'], PHP_URL_HOST);
+             $status_icon = $job['status'] === 'success' ? '<span style="color: green;">✔</span>' : '<span style="color: orange;">✖</span>';
+             $status_tooltip = $job['status'] === 'success' ? 'Fetched Successfully' : 'Skipped';
+ 
+             echo '<tr>';
+             echo '<td>' . esc_html($source_domain ? $source_domain : 'Unknown') . '</td>';
+             echo '<td>' . esc_html($job['post_title']) . '</td>';
+             echo '<td>' . esc_html($job['company_name']) . '</td>';
+             echo '<td>' . esc_html(implode(', ', $job['job_categories'])) . '</td>';
+             echo '<td>' . esc_html($job['job_type']) . '</td>';
+             echo '<td>' . esc_html($job['fetched_date']) . '</td>';
+             echo '<td class="status-cell"><span class="tooltip">' . $status_icon . '<span class="tooltiptext">' . esc_html($status_tooltip) . '</span></span></td>';
+             echo '<td>' . ($job['status'] === 'success' ? '<a href="' . esc_url($job_url) . '" target="_blank">View Job</a>' : 'No Link') . '</td>';
+             echo '</tr>';
+         }
+ 
+         echo '</tbody></table>';
+     }
+
+    // Add CSS styles
+    echo '<style>
+    .job-filters-wrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0px;
+        padding-bottom: 5px;
+    }
+
+    .job-count {
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+    form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 0;
+    }
+
+    form select,
+    form input[type="submit"] {
+        font-size: 14px;
+        padding: 6px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+
+    form input[type="submit"] {
+        background-color: #0073aa;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background-color 0.3s ease;
+    }
+
+    form input[type="submit"]:hover {
+        background-color: #f6f7f7;
+    }
+    .wp-core-ui .button-primary{
+        color: #2271b1;
+        border-color: #2271b1;
+        background: #f6f7f7;
+        vertical-align: top;
+    }
+    .wp-core-ui .button:hover {
+        background: #f0f0f1;
+        border-color: #0a4b78;
+        color: #0a4b78;
+    }
+
+    .wp-list-table th, .wp-list-table td {
+        padding: 10px;
+        text-align: left;
+    }
+
+    .wp-list-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 5px;
+        font-size: 14px;
+    }
+
+    .status-cell {
+        text-align: center;
+    }
+
+    .tooltip {
+        position: relative;
+    }
+
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        background-color: #555;
+        color: #fff;
+        padding: 5px;
+        border-radius: 4px;
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+    </style>';
+
+    echo '</div>'; // End of Wrapper
 }
+
+
+
+
+
+function enqueue_font_awesome() {
+    wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css');
+}
+add_action('admin_enqueue_scripts', 'enqueue_font_awesome');
+
+
+
+
+
+
 
 
 
@@ -1996,7 +2291,8 @@ add_action('before_delete_post', 'rjobs_delete_job_hook');
 
 // Example of calling fetch jobs explicitly, not triggered by page load
 if (isset($_POST['rjobs_fetch']) && check_admin_referer('rjobs_fetch_jobs', 'rjobs_fetch_nonce')) {
-    rjobs_fetch_jobs();
+   
+ rjobs_fetch_jobs();
     rjobs_fetch_jobs_normal_links();
 }
 
@@ -2054,45 +2350,6 @@ function rjobs_reactivate_cron()
     error_log('Cron job reactivated');
 }
 
-// Function to calculate schedule interval in seconds
-function rjobs_get_schedule_interval_seconds($schedule_frequency)
-{
-    switch ($schedule_frequency) {
-        case 'minutely':
-            return MINUTE_IN_SECONDS; // 60 seconds
-        case 'halfhourly':
-            return MINUTE_IN_SECONDS * 30; // 30 minutes
-        case 'hourly':
-            return HOUR_IN_SECONDS;
-        case 'twicedaily':
-            return 12 * HOUR_IN_SECONDS;
-        case 'daily':
-            return DAY_IN_SECONDS;
-            // Add more cases for other frequencies as needed
-        default:
-            return HOUR_IN_SECONDS; // Default to hourly if frequency is unknown
-    }
-}
-
-
-
-function rjobs_fetch_source() {
-    $fetch_source = get_option('rjobs_fetch_source', 'rss'); // Default to 'rss'
-    $num_jobs = get_option('rjobs_num_jobs', 10);
-
-    switch ($fetch_source) {
-        case 'rss':
-            rjobs_fetch_jobs($num_jobs);
-            break;
-        case 'normal_links':
-            rjobs_fetch_jobs_normal_links($num_jobs);
-            break;
-        default:
-            error_log('Remote Job Aggregator: Invalid fetch source - ' . $fetch_source);
-            break;
-    }
-}
-
 function rjobs_fetch_jobs_cron() {
     $fetch_source = get_option('rjobs_fetch_source', 'rss'); // Default to 'rss'
     $num_jobs = get_option('rjobs_num_jobs', 10);
@@ -2143,27 +2400,104 @@ function rjobs_schedule_cron() {
     rjobs_deactivate_cron();
 
     // Schedule new cron job based on fetch frequency
-    switch ($frequency) {
+    if ($frequency === 'custom') {
+        $custom_minutes = get_option('custom_minutes', 0);
+        $custom_hours = get_option('custom_hours', 0);
+        $custom_days = get_option('custom_days', 0);
+        
+        $total_seconds = ($custom_minutes * MINUTE_IN_SECONDS) + 
+                         ($custom_hours * HOUR_IN_SECONDS) + 
+                         ($custom_days * DAY_IN_SECONDS);
+                         
+        // Schedule the custom interval
+        if ($total_seconds > 0) {
+            add_filter('cron_schedules', function($schedules) use ($total_seconds) {
+                $schedules['custom'] = array(
+                    'interval' => $total_seconds,
+                    'display'  => __('Custom Frequency'),
+                );
+                return $schedules;
+            });
+            wp_schedule_event(time(), 'custom', 'rjobs_fetch_jobs_cron');
+
+            // Log custom frequency details
+            error_log("Remote Job Aggregator: Cron job scheduled with frequency - custom, Interval: {$custom_days} days, {$custom_hours} hours, {$custom_minutes} minutes.");
+        }
+    } else {
+        switch ($frequency) {
+            case 'minutely':
+                wp_schedule_event(time(), 'every_minute', 'rjobs_fetch_jobs_cron');
+                break;
+            case 'half_hourly':
+                wp_schedule_event(time(), 'every_half_hour', 'rjobs_fetch_jobs_cron');
+                break;
+            case 'hourly':
+                wp_schedule_event(time(), 'hourly', 'rjobs_fetch_jobs_cron');
+                break;
+            case 'twicedaily':
+                wp_schedule_event(time(), 'twicedaily', 'rjobs_fetch_jobs_cron');
+                break;
+            case 'daily':
+            default:
+                wp_schedule_event(time(), 'daily', 'rjobs_fetch_jobs_cron');
+                break;
+        }
+
+        // Log the selected frequency
+        error_log("Remote Job Aggregator: Cron job scheduled with frequency - $frequency");
+    }
+}
+
+
+// Function to calculate schedule interval in seconds
+function rjobs_get_schedule_interval_seconds($schedule_frequency)
+{
+    switch ($schedule_frequency) {
         case 'minutely':
-            wp_schedule_event(time(), 'every_minute', 'rjobs_fetch_jobs_cron');
-            break;
-        case 'half_hourly':
-            wp_schedule_event(time(), 'every_half_hour', 'rjobs_fetch_jobs_cron');
-            break;
+            return MINUTE_IN_SECONDS; // 60 seconds
+        case 'halfhourly':
+            return MINUTE_IN_SECONDS * 30; // 30 minutes
         case 'hourly':
-            wp_schedule_event(time(), 'hourly', 'rjobs_fetch_jobs_cron');
-            break;
+            return HOUR_IN_SECONDS; // 1 hour
         case 'twicedaily':
-            wp_schedule_event(time(), 'twicedaily', 'rjobs_fetch_jobs_cron');
-            break;
+            return 12 * HOUR_IN_SECONDS; // 12 hours
         case 'daily':
+            return DAY_IN_SECONDS; // 1 day
+        case 'custom':
+            // Retrieve custom frequency settings
+            $custom_minutes = get_option('custom_minutes', 0);
+            $custom_hours = get_option('custom_hours', 0);
+            $custom_days = get_option('custom_days', 0);
+            
+            // Calculate total seconds for custom frequency
+            return ($custom_minutes * MINUTE_IN_SECONDS) +
+                   ($custom_hours * HOUR_IN_SECONDS) +
+                   ($custom_days * DAY_IN_SECONDS);
         default:
-            wp_schedule_event(time(), 'daily', 'rjobs_fetch_jobs_cron');
+            return HOUR_IN_SECONDS; // Default to hourly if frequency is unknown
+    }
+}
+
+
+
+function rjobs_fetch_source() {
+    $fetch_source = get_option('rjobs_fetch_source', 'rss'); // Default to 'rss'
+    $num_jobs = get_option('rjobs_num_jobs', 10);
+
+    switch ($fetch_source) {
+        case 'rss':
+            rjobs_fetch_jobs($num_jobs);
+            break;
+        case 'normal_links':
+            rjobs_fetch_jobs_normal_links($num_jobs);
+            break;
+        default:
+            error_log('Remote Job Aggregator: Invalid fetch source - ' . $fetch_source);
             break;
     }
-
-    error_log("Remote Job Aggregator: Cron job scheduled with frequency - $frequency");
 }
+
+
 // Function to check if cron job is scheduled
 function rjobs_is_cron_job_scheduled()
 {
