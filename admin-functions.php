@@ -150,7 +150,7 @@ function rjobs_main_settings_page() {
     echo '<option value="custom"' . selected($schedule_frequency, 'custom', false) . '>Custom Frequency</option>';
     echo '</select>';
 
-    echo '<div id="custom_frequency_fields" style="display: ' . ($schedule_frequency === 'custom' ? 'block' : 'none') . '; width: 400px; margin-top: 10px;">';
+    echo '<div id="custom_frequency_fields" style="display: ' . ($schedule_frequency === 'custom' ? 'block' : 'none') . ';">';
     echo '<div style="display: flex; justify-content: space-between; margin-bottom: 5px;">';
     echo '<label for="custom_minutes" style="flex: 1; text-align: center;">Min</label>';
     echo '<label for="custom_hours" style="flex: 1; text-align: center;">Hrs</label>';
@@ -243,10 +243,11 @@ function rjobs_main_settings_page() {
         #custom_frequency_fields {
             display: flex;
             flex-direction: column;
-            width: 400px; /* Set fixed width */
+            width: 380px; /* Set fixed width */
         }
         #custom_frequency_fields input[type="number"] {
-            width: 100%; /* Full width of their flex container */
+            width: 100%; 
+            text-align: center;
         }
     </style>';
 
