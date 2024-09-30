@@ -1,6 +1,6 @@
 # Remote Jobs Aggregator Plugin
 
-**Remote Jobs Aggregator Plugin** fetches remote job listings from multiple websites and aggregates them in one place. It's a great tool for users looking for remote work opportunities.
+**Remote Jobs Aggregator Plugin** fetches remote job listings from multiple websites and aggregates them in one place. It's a great tool for users looking to build remote work job boards.
 
 ## Demo
 Check out the live demo of the plugin here:
